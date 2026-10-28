@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OWN Digital Laboratory — Система заказов</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --org:#E8651A; --org-d:rgba(232,101,26,0.10); --org-g:rgba(232,101,26,0.25);
+  --bg:#F4F4F4; --card:#FFFFFF; --card2:#F0F0F0; --card3:#EBEBEB;
+  --border:#E2E2E2; --border2:#D4D4D4;
+  --t1:#1E1E1E; --t2:#555555; --t3:#777777; --t4:#999999; --t5:#BBBBBB;
+  --green:#16A34A; --yellow:#CA8A04; --blue:#2563EB;
+  --purple:#7C3AED; --red:#DC2626; --teal:#059669;
+  --font:'Montserrat',sans-serif; --mono:'JetBrains Mono',monospace;
+  --h:58px; --sw:242px; --dw:530px; --r:8px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;font-family:var(--font);background:var(--bg);color:var(--t1);font-size:13px;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font-family:var(--font)}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#CCC;border-radius:2px}::-webkit-scrollbar-thumb:hover{background:#AAA}
+
+/* HEADER */
+.hdr{position:fixed;top:0;left:0;right:0;height:var(--h);background:var(--card);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;padding:0 24px;z-index:200;
+  box-shadow:0 1px 6px rgba(0,0,0,.06)}
+.logo-own{font-size:20px;font-weight:800;color:var(--org);letter-spacing:3px}
+.logo-sub{font-size:9px;font-weight:500;color:var(--t4);letter-spacing:2.5px;margin-left:8px;text-transform:uppercase}
+.env-badge{background:var(--org-d);border:1px solid var(--org-g);color:var(--org);font-size:9px;font-weight:700;padding:3px 10px;border-radius:4px;letter-spacing:1.5px;text-transform:uppercase}
+.hdr-bell{position:relative;font-size:17px;cursor:pointer;color:var(--t4);background:none;border:none;padding:4px;transition:color .2s}
+.hdr-bell:hover{color:var(--t1)}
+.notif-dot{position:absolute;top:2px;right:2px;width:7px;height:7px;background:var(--org);border-radius:50%;border:1.5px solid var(--card);animation:pulse 2s infinite}
+.avatar{width:30px;height:30px;background:var(--org-d);border:1.5px solid var(--org-g);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--org);cursor:pointer;user-select:none}
+
+/* LAYOUT */
+.layout{display:grid;grid-template-columns:var(--sw) 1fr;height:100vh;padding-top:var(--h)}
+
+/* SIDEBAR */
+.sidebar{background:var(--card);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column;padding:14px 0 24px}
+.sb-block{padding:0 8px}
+.s-lbl{font-size:9px;font-weight:700;letter-spacing:2px;color:var(--t4);text-transform:uppercase;padding:0 8px;margin-bottom:5px;display:block}
+.btn-new{width:100%;padding:11px 14px;background:var(--org);color:#fff;border:none;border-radius:var(--r);font-size:12px;font-weight:700;letter-spacing:.5px;display:flex;align-items:center;justify-content:center;gap:7px;margin-bottom:14px;cursor:pointer;transition:all .2s}
+.btn-new:hover{background:#D45A10;transform:translateY(-1px);box-shadow:0 4px 14px var(--org-g)}
+.s-div{height:1px;background:var(--border);margin:10px 6px}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;color:var(--t3);transition:all .15s;margin-bottom:2px;border-left:2px solid transparent}
+.nav-item:hover{background:var(--card2);color:var(--t1)}
+.nav-item.active{background:var(--org-d);color:var(--org);border-left-color:var(--org)}
+.nav-cnt{margin-left:auto;font-size:10px;font-family:var(--mono);color:var(--t4)}
+.nav-item.active .nav-cnt{color:var(--org)}
+.sb-stats{margin-top:auto;padding:12px 14px 0}
+.sb-stat{display:flex;justify-content:space-between;padding:3px 0;font-size:11px}
+.sb-stat .sk{color:var(--t4)}.sb-stat .sv{font-family:var(--mono);font-weight:600}
+
+/* MAIN */
+.main{overflow-y:auto;background:var(--bg);display:flex;flex-direction:column}
+.topbar{padding:18px 24px 0;display:flex;align-items:center;gap:14px;flex-shrink:0}
+.search-wrap{flex:1;max-width:400px;position:relative}
+.search-wrap input{width:100%;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px 10px 38px;color:var(--t1);font-size:12px;outline:none;transition:border-color .2s;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.search-wrap input:focus{border-color:var(--org)}
+.search-wrap input::placeholder{color:var(--t4)}
+.search-ico{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--t4);pointer-events:none}
+.stat-chips{display:flex;gap:10px}
+.stat-chip{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:7px 14px;display:flex;align-items:center;gap:8px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.stat-chip .sn{font-size:17px;font-weight:700;font-family:var(--mono);line-height:1}
+.stat-chip .sl{font-size:10px;color:var(--t3)}
+
+/* ORDERS */
+.orders-sec{padding:16px 24px 24px}
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}
+.sec-ttl{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--t4)}
+.btn-sort{background:var(--card);border:1px solid var(--border);color:var(--t3);font-size:11px;padding:5px 10px;border-radius:5px;cursor:pointer;transition:all .15s}
+.btn-sort:hover{background:var(--card2);color:var(--t1)}
+.orders-list{display:flex;flex-direction:column;gap:7px}
+
+/* CARD */
+.order-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:13px 16px;cursor:pointer;transition:all .18s;position:relative;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.order-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:var(--r) 0 0 var(--r)}
+.order-card.c-green::before{background:var(--green)}.order-card.c-yellow::before{background:var(--yellow)}
+.order-card.c-blue::before{background:var(--blue)}.order-card.c-orange::before{background:var(--org)}
+.order-card.c-delivery::before{background:var(--purple)}.order-card.c-done::before{background:var(--teal)}
+.order-card:hover{border-color:var(--border2);transform:translateX(2px);box-shadow:0 3px 14px rgba(0,0,0,.08)}
+.order-card.selected{border-color:var(--org);background:rgba(232,101,26,.03)}
+.c-top{display:flex;align-items:center;gap:8px;margin-bottom:9px;flex-wrap:nowrap}
+.c-id{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--org);background:var(--org-d);padding:2px 7px;border-radius:4px;white-space:nowrap;flex-shrink:0}
+.c-patient{font-size:13px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-type{font-size:10px;color:var(--t3);background:var(--card2);border:1px solid var(--border);padding:2px 7px;border-radius:4px;white-space:nowrap;flex-shrink:0}
+.c-dl{font-size:10px;font-family:var(--mono);color:var(--t4);white-space:nowrap;flex-shrink:0}
+.c-dl.urg{color:var(--red);font-weight:600}
+.c-bot{display:flex;align-items:center;gap:10px}
+.c-clinic{font-size:11px;color:var(--t3);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status-badge{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;flex-shrink:0}
+.sb-green{background:rgba(22,163,74,.1);color:var(--green)}.sb-yellow{background:rgba(202,138,4,.1);color:var(--yellow)}
+.sb-blue{background:rgba(37,99,235,.1);color:var(--blue)}.sb-orange{background:var(--org-d);color:var(--org)}
+.sb-delivery{background:rgba(124,58,237,.1);color:var(--purple)}.sb-done{background:rgba(5,150,105,.1);color:var(--teal)}
+.progress-bar{height:3px;background:var(--card3);border-radius:2px;margin-top:10px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--org),#FF9500);border-radius:2px;transition:width .6s}
+
+/* DETAIL PANEL */
+.detail-panel{display:none;position:fixed;top:var(--h);right:0;bottom:0;width:var(--dw);background:var(--card);border-left:1px solid var(--border);z-index:100;overflow:hidden;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,.07)}
+.detail-panel.open{display:flex;animation:slideIn .25s cubic-bezier(.4,0,.2,1)}
+@keyframes slideIn{from{transform:translateX(30px);opacity:0}to{transform:translateX(0);opacity:1}}
+.det-hdr{padding:18px 22px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
+.det-hdr-row{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.det-title{font-size:16px;font-weight:700}.det-sub{font-size:11px;color:var(--t3);margin-top:2px}
+.btn-close{background:var(--card2);border:1px solid var(--border);color:var(--t3);width:28px;height:28px;border-radius:5px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-left:10px;transition:all .15s}
+.btn-close:hover{background:var(--card3);color:var(--t1)}
+.det-meta{display:flex;gap:6px;flex-wrap:wrap}
+.meta-tag{font-size:10px;color:var(--t3);background:var(--card2);border:1px solid var(--border);padding:3px 8px;border-radius:4px}
+.det-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.det-tab{flex:1;padding:10px 6px;font-size:11px;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;color:var(--t3);cursor:pointer;transition:all .2s;letter-spacing:.3px}
+.det-tab:hover{color:var(--t1);background:var(--card2)}
+.det-tab.active{color:var(--org);border-bottom-color:var(--org);background:var(--org-d)}
+.det-body{overflow-y:auto;flex:1}
+.tab-pane{display:none}.tab-pane.active{display:block}
+
+/* INFO TAB */
+.info-sec{padding:14px 22px}
+.info-card{background:var(--card2);border:1px solid var(--border);border-radius:var(--r);padding:13px 14px;margin-bottom:12px}
+.info-card-title{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--t4);margin-bottom:10px}
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)}
+.info-row:last-child{border-bottom:none}
+.info-row .ik{font-size:11px;color:var(--t4)}.info-row .iv{font-size:11px;font-weight:600;text-align:right}
+.prog-label{display:flex;justify-content:space-between;font-size:10px;color:var(--t4);margin-bottom:6px}
+
+/* TIMELINE */
+.tl-sec{padding:16px 22px 24px}
+.tl-lbl{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--t4);margin-bottom:18px}
+.tl-item{display:flex;gap:12px}
+.tl-left{display:flex;flex-direction:column;align-items:center;width:28px;flex-shrink:0}
+.tl-dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;border:2px solid transparent;transition:all .3s;z-index:2}
+.tl-dot.s-done{background:rgba(22,163,74,.12);border-color:var(--green)}
+.tl-dot.s-active{background:var(--org-d);border-color:var(--org);box-shadow:0 0 10px var(--org-g)}
+.tl-dot.s-pending{background:var(--card2);border-color:var(--border)}
+.tl-dot.s-warn{background:rgba(202,138,4,.12);border-color:var(--yellow)}
+.tl-line{width:2px;flex:1;min-height:20px;margin:2px 0;border-radius:1px}
+.tl-line.s-done{background:rgba(22,163,74,.3)}.tl-line.s-active{background:linear-gradient(to bottom,var(--org),var(--border))}.tl-line.s-pending{background:var(--card3)}
+.tl-content{flex:1;padding-bottom:18px}
+.tl-row{display:flex;align-items:center;gap:7px;margin-bottom:3px;min-height:26px}
+.tl-name{font-size:12px;font-weight:600;line-height:1.3}
+.tl-name.s-done{color:var(--t4)}.tl-name.s-active{color:var(--t1)}.tl-name.s-pending{color:var(--t5)}.tl-name.s-warn{color:var(--yellow)}
+.active-badge{display:inline-flex;align-items:center;gap:4px;font-size:8px;font-weight:700;letter-spacing:.8px;color:var(--org);background:var(--org-d);border:1px solid var(--org-g);padding:2px 6px;border-radius:10px;text-transform:uppercase}
+.active-dot{width:5px;height:5px;border-radius:50%;background:var(--org);animation:pulse 1.8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
+.tl-ts{margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--t5);white-space:nowrap}
+.tl-ts.active{color:var(--org)}
+.tl-desc{font-size:10px;color:var(--t4);line-height:1.6;margin-bottom:7px}
+.tl-desc.active{color:var(--t2)}
+.tl-subs{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.tl-sub{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--t5)}
+.tl-sub.done{color:var(--t3)}
+.sub-check{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:8px;flex-shrink:0;color:transparent}
+.tl-sub.done .sub-check{background:rgba(22,163,74,.12);border-color:var(--green);color:var(--green)}
+.tl-actions{display:flex;gap:7px;margin-top:8px;flex-wrap:wrap}
+.tl-btn{padding:6px 12px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:.2px;border:none}
+.tl-btn.primary{background:var(--org);color:#fff}.tl-btn.primary:hover{background:#D45A10}
+.tl-btn.sec{background:var(--card2);color:var(--t2);border:1px solid var(--border)}.tl-btn.sec:hover{background:var(--card3)}
+.tl-btn.warn-btn{background:rgba(202,138,4,.1);color:var(--yellow);border:1px solid rgba(202,138,4,.3)}
+.tl-btn.danger{background:rgba(220,38,38,.1);color:var(--red);border:1px solid rgba(220,38,38,.3)}
+.tl-btn.success{background:rgba(22,163,74,.1);color:var(--green);border:1px solid rgba(22,163,74,.3)}
+.tl-btn.purple-btn{background:rgba(124,58,237,.1);color:var(--purple);border:1px solid rgba(124,58,237,.3)}
+.approval-box{background:var(--card2);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-top:8px}
+.approval-status{font-size:11px;font-weight:600;color:var(--yellow);margin-bottom:8px}
+.tracking-box{background:var(--card2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;margin-bottom:8px}
+.tracking-num{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--org);margin:4px 0}
+.tracking-status-txt{font-size:10px;color:var(--t3)}
+
+/* FILES */
+.files-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.file-item{background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:10px 8px;text-align:center;cursor:pointer;transition:all .15s;font-size:10px;color:var(--t2)}
+.file-item:hover{border-color:var(--org);color:var(--t1)}
+.file-icon{font-size:22px;margin-bottom:5px;display:block}
+.file-name{font-size:9px;word-break:break-all;color:var(--t3)}
+.upload-zone{border:2px dashed var(--border2);border-radius:var(--r);padding:18px;text-align:center;cursor:pointer;color:var(--t4);font-size:11px;margin-top:12px;transition:all .2s}
+.upload-zone:hover{border-color:var(--org);color:var(--t2)}
+
+/* COMMENTS */
+.comments-sec{padding:14px 22px 24px}
+.comment-list{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+.comment-item{display:flex;gap:9px}
+.c-av{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.c-av.admin{background:var(--org-d);border:1px solid var(--org-g);color:var(--org)}
+.c-av.tech{background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.3);color:var(--blue)}
+.c-av.doc{background:rgba(22,163,74,.1);border:1px solid rgba(22,163,74,.3);color:var(--green)}
+.c-bubble{flex:1;background:var(--card2);border:1px solid var(--border);border-radius:3px 8px 8px 8px;padding:9px 12px}
+.c-meta{display:flex;gap:8px;align-items:center;margin-bottom:5px}
+.c-author{font-size:11px;font-weight:600}
+.c-role{font-size:9px;color:var(--t4);background:var(--card3);padding:1px 5px;border-radius:3px}
+.c-time{font-size:9px;font-family:var(--mono);color:var(--t5);margin-left:auto}
+.c-text{font-size:11px;color:var(--t2);line-height:1.6}
+.comment-input-wrap{display:flex;gap:8px;align-items:flex-end}
+.comment-input{flex:1;background:var(--card2);border:1px solid var(--border);border-radius:7px;padding:9px 12px;color:var(--t1);font-size:12px;resize:none;min-height:60px;outline:none;transition:border-color .2s}
+.comment-input:focus{border-color:var(--org)}
+.comment-input::placeholder{color:var(--t4)}
+.btn-send{background:var(--org);border:none;color:#fff;width:36px;height:36px;border-radius:7px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .2s}
+.btn-send:hover{background:#D45A10}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(4px);z-index:500;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:28px;width:560px;max-height:92vh;overflow-y:auto;animation:modalIn .2s;box-shadow:0 20px 60px rgba(0,0,0,.15)}
+@keyframes modalIn{from{transform:scale(.95) translateY(8px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
+.modal-title{font-size:18px;font-weight:700;margin-bottom:4px}
+.modal-sub{font-size:11px;color:var(--t4);margin-bottom:22px;display:flex;align-items:center;gap:6px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-group{margin-bottom:13px}
+.form-label{display:block;font-size:10px;font-weight:600;letter-spacing:.5px;color:var(--t3);margin-bottom:5px;text-transform:uppercase}
+.form-input,.form-select,.form-textarea{width:100%;background:var(--card2);border:1px solid var(--border);border-radius:5px;padding:9px 11px;color:var(--t1);font-size:12px;outline:none;transition:border-color .2s}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--org)}
+.form-input::placeholder,.form-textarea::placeholder{color:var(--t4)}
+.form-select option{background:#fff;color:var(--t1)}
+.form-textarea{resize:vertical;min-height:70px}
+.form-div{height:1px;background:var(--border);margin:16px 0}
+.form-sec-title{font-size:9px;font-weight:700;letter-spacing:2px;color:var(--t4);text-transform:uppercase;margin-bottom:12px}
+.modal-actions{display:flex;gap:10px;margin-top:20px}
+.modal-btn{flex:1;padding:12px;border-radius:var(--r);font-size:13px;font-weight:700;border:none;cursor:pointer;transition:all .2s}
+.modal-btn.primary{background:var(--org);color:#fff}.modal-btn.primary:hover{background:#D45A10;box-shadow:0 4px 14px var(--org-g)}
+.modal-btn.cancel{background:var(--card2);color:var(--t3);border:1px solid var(--border)}.modal-btn.cancel:hover{background:var(--card3)}
+.upload-zone-sm{border:2px dashed var(--border2);border-radius:var(--r);padding:18px;text-align:center;cursor:pointer;color:var(--t4);font-size:11px;transition:all .2s}
+.upload-zone-sm:hover{border-color:var(--org);color:var(--t2)}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 32px rgba(0,0,0,.12);min-width:280px;z-index:999;animation:toastIn .3s;display:none}
+.toast.show{display:flex}
+@keyframes toastIn{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
+.toast-icon{font-size:18px}
+.toast-title{font-size:12px;font-weight:700}
+.toast-sub{font-size:10px;color:var(--t3);margin-top:2px}
+
+/* EMPTY */
+.empty-state{text-align:center;padding:60px 0;color:var(--t4)}
+.empty-icon{font-size:36px;margin-bottom:12px}
+.empty-text{font-weight:600;color:var(--t3);margin-bottom:4px}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="hdr">
+  <div style="display:flex;align-items:baseline">
+    <span class="logo-own">OWN</span>
+    <span class="logo-sub">Digital Laboratory</span>
+  </div>
+  <div class="env-badge">Система заказов v1.0</div>
+  <div style="display:flex;align-items:center;gap:16px">
+    <button class="hdr-bell" onclick="showToast('3 новых события','Требует вашего внимания','warning')">
+      🔔<div class="notif-dot"></div>
+    </button>
+    <div class="avatar">ИЖ</div>
+  </div>
+</header>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sb-block">
+      <button class="btn-new" onclick="openModal()"><span style="font-size:16px">＋</span> Новый заказ</button>
+      <span class="s-lbl">По статусу</span>
+      <div class="nav-item active" onclick="filterStatus('all',this)">📋 Все заказы <span class="nav-cnt" id="cnt-all">6</span></div>
+      <div class="nav-item" onclick="filterStatus('green',this)">🟢 Приём / проверка <span class="nav-cnt">2</span></div>
+      <div class="nav-item" onclick="filterStatus('yellow',this)">🟡 Анализ / план <span class="nav-cnt">1</span></div>
+      <div class="nav-item" onclick="filterStatus('blue',this)">🔵 Производство <span class="nav-cnt">1</span></div>
+      <div class="nav-item" onclick="filterStatus('orange',this)">🟠 Финишинг / QC <span class="nav-cnt">1</span></div>
+      <div class="nav-item" onclick="filterStatus('delivery',this)">🚚 Доставка <span class="nav-cnt">1</span></div>
+      <div class="nav-item" onclick="filterStatus('done',this)">✅ Завершённые <span class="nav-cnt">0</span></div>
+      <div class="s-div"></div>
+      <span class="s-lbl">По технику</span>
+      <div class="nav-item" onclick="filterTech('all',this)">👥 Все техники</div>
+      <div class="nav-item" onclick="filterTech('Артём',this)">🔷 Артём К.</div>
+      <div class="nav-item" onclick="filterTech('Мария',this)">🔶 Мария В.</div>
+      <div class="nav-item" onclick="filterTech('Дмитрий',this)">🔹 Дмитрий Н.</div>
+      <div class="s-div"></div>
+      <span class="s-lbl">Разделы</span>
+      <div class="nav-item" onclick="showToast('Аналитика','Доступно в полной версии')">📊 Аналитика</div>
+      <div class="nav-item" onclick="showToast('Сроки','Доступно в полной версии')">⏱ Сроки</div>
+      <div class="nav-item" onclick="showToast('Настройки','Доступно в полной версии')">⚙️ Настройки</div>
+    </div>
+    <div class="sb-stats">
+      <div class="s-div" style="margin:0 0 10px"></div>
+      <span class="s-lbl">Сегодня</span>
+      <div class="sb-stat"><span class="sk">Выполнено этапов</span><span class="sv" style="color:var(--org)">7</span></div>
+      <div class="sb-stat"><span class="sk">Закрыто заказов</span><span class="sv" style="color:var(--green)">2</span></div>
+      <div class="sb-stat"><span class="sk">Просрочено</span><span class="sv" style="color:var(--red)">0</span></div>
+    </div>
+  </aside>
+
+  <!-- WRAPPER: MAIN + DETAIL -->
+  <div style="display:flex;overflow:hidden">
+
+    <!-- MAIN -->
+    <main class="main" id="mainArea">
+      <div class="topbar">
+        <div class="search-wrap">
+          <span class="search-ico">🔍</span>
+          <input type="text" placeholder="Поиск по пациенту, клинике, ID..." oninput="searchOrders(this.value)">
+        </div>
+        <div class="stat-chips">
+          <div class="stat-chip"><span class="sn" style="color:var(--org)" id="stat-active">6</span><span class="sl">Активных</span></div>
+          <div class="stat-chip"><span class="sn" style="color:var(--red)">2</span><span class="sl">⚡ Срочных</span></div>
+          <div class="stat-chip"><span class="sn" style="color:var(--green)">14</span><span class="sl">Закрыто / мес</span></div>
+        </div>
+      </div>
+      <div class="orders-sec">
+        <div class="sec-hdr">
+          <span class="sec-ttl">Активные заказы</span>
+          <button class="btn-sort">По сроку ▾</button>
+        </div>
+        <div class="orders-list" id="ordersList"></div>
+      </div>
+    </main>
+
+    <!-- DETAIL PANEL -->
+    <div class="detail-panel" id="detPanel">
+      <div class="det-hdr">
+        <div class="det-hdr-row">
+          <div>
+            <div class="det-title" id="dp-title">—</div>
+            <div class="det-sub" id="dp-sub"></div>
+          </div>
+          <button class="btn-close" onclick="closeDetail()">✕</button>
+        </div>
+        <div class="det-meta" id="dp-meta"></div>
+      </div>
+      <div class="det-tabs">
+        <button class="det-tab active" onclick="switchTab('info',this)">📋 Инфо</button>
+        <button class="det-tab" onclick="switchTab('timeline',this)">📍 Этапы</button>
+        <button class="det-tab" onclick="switchTab('files',this)">📁 Файлы</button>
+        <button class="det-tab" onclick="switchTab('comments',this)">💬 Чат</button>
+      </div>
+      <div class="det-body">
+        <div id="tab-info" class="tab-pane active">
+          <div class="info-sec">
+            <div class="info-card"><div class="info-card-title">Детали заказа</div><div id="dp-info-rows"></div></div>
+            <div class="info-card">
+              <div class="info-card-title">Прогресс выполнения</div>
+              <div class="prog-label"><span id="dp-stage-lbl">—</span><span id="dp-pct" style="font-family:var(--mono);font-weight:600;color:var(--org)">0%</span></div>
+              <div class="progress-bar" style="height:6px"><div class="progress-fill" id="dp-prog" style="width:0%"></div></div>
+            </div>
+            <div class="info-card"><div class="info-card-title">Ответственные</div><div id="dp-team"></div></div>
+          </div>
+        </div>
+        <div id="tab-timeline" class="tab-pane">
+          <div class="tl-sec"><div class="tl-lbl">📍 Этапность выполнения · 14 этапов</div><div id="dp-tl"></div></div>
+        </div>
+        <div id="tab-files" class="tab-pane">
+          <div class="info-sec">
+            <div class="info-card"><div class="info-card-title">Прикреплённые файлы</div><div class="files-grid" id="dp-files"></div></div>
+            <div class="upload-zone" onclick="showToast('Загрузка файлов','STL · DICOM · JPG · PDF до 500 МБ')">
+              <div style="font-size:24px;margin-bottom:6px">📂</div>
+              <div>Добавить файл · <span style="color:var(--org)">STL · DICOM · JPG · PDF</span></div>
+            </div>
+          </div>
+        </div>
+        <div id="tab-comments" class="tab-pane">
+          <div class="comments-sec">
+            <div class="comment-list" id="dp-comments"></div>
+            <div class="comment-input-wrap">
+              <textarea class="comment-input" id="commentInput" placeholder="Напишите технику или менеджеру..." rows="3"></textarea>
+              <button class="btn-send" onclick="sendComment()" title="Ctrl+Enter">↑</button>
+            </div>
+            <div style="font-size:9px;color:var(--t5);text-align:right;margin-top:4px">Ctrl+Enter для отправки</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay" onclick="onOverlayClick(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">＋ Новый заказ-наряд</div>
+    <div class="modal-sub"><span style="width:6px;height:6px;border-radius:50%;background:var(--org);display:inline-block"></span> OWN Digital Laboratory</div>
+    <div class="form-sec-title">Пациент и клиника</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Пациент *</label><input class="form-input" id="f-patient" placeholder="Фамилия И.О."></div>
+      <div class="form-group"><label class="form-label">Клиника *</label><input class="form-input" id="f-clinic" placeholder="Название клиники"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Врач</label><input class="form-input" id="f-doctor" placeholder="Фамилия И.О. врача"></div>
+    <div class="form-div"></div>
+    <div class="form-sec-title">Работа</div>
+    <div class="form-group"><label class="form-label">Тип работы *</label>
+      <select class="form-select" id="f-type">
+        <option value="">— Выберите тип —</option>
+        <option value="veneers_emax">Виниры (е.мах / фельспат)</option>
+        <option value="crown_zirconia">Коронки (цирконий)</option>
+        <option value="crown_emax">Коронки (е.мах)</option>
+        <option value="bridge">Мостовидный протез</option>
+        <option value="implant_crown">Имплант-корона</option>
+        <option value="full_mouth">Полная реставрация</option>
+        <option value="temp">Временные конструкции (ПММА)</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Количество единиц *</label><input class="form-input" id="f-units" type="number" min="1" placeholder="напр. 6"></div>
+      <div class="form-group"><label class="form-label">Оттенок (Vita/BL)</label><input class="form-input" id="f-shade" placeholder="напр. A2, BL1"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Зубы</label><input class="form-input" id="f-teeth" placeholder="напр. 11,12,13,21,22,23"></div>
+      <div class="form-group"><label class="form-label">Материал</label>
+        <select class="form-select" id="f-material">
+          <option value="">— Материал —</option>
+          <option>IPS e.max</option><option>Цирконий Ultra HT</option>
+          <option>Katana UTML</option><option>Фельспатовая керамика</option><option>ПММА</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-div"></div>
+    <div class="form-sec-title">Сроки и ответственный</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Срок выполнения *</label><input class="form-input" id="f-deadline" type="date"></div>
+      <div class="form-group"><label class="form-label">Техник</label>
+        <select class="form-select" id="f-tech">
+          <option value="">— Назначить —</option>
+          <option value="artem">Артём К.</option><option value="maria">Мария В.</option><option value="dmitry">Дмитрий Н.</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Приоритет</label>
+        <select class="form-select" id="f-priority"><option value="normal">Стандартный</option><option value="urgent">⚡ Срочный</option><option value="vip">⭐ VIP</option></select>
+      </div>
+    </div>
+    <div class="form-div"></div>
+    <div class="form-sec-title">Техническое задание</div>
+    <div class="form-group"><label class="form-label">Комментарии и ТЗ</label><textarea class="form-textarea" id="f-notes" placeholder="Пожелания по форме, окклюзии, текстуре..."></textarea></div>
+    <div class="form-group"><label class="form-label">Файлы</label>
+      <div class="upload-zone-sm" onclick="showToast('Загрузка','STL · DICOM · JPG · PDF до 500 МБ')">
+        <div style="font-size:24px;margin-bottom:6px">📁</div>
+        <div>Перетащите или <span style="color:var(--org)">выберите файлы</span></div>
+        <div style="font-size:9px;color:var(--t5);margin-top:4px">STL · DICOM · JPG · PNG · PDF · до 500 МБ</div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn cancel" onclick="closeModal()">Отмена</button>
+      <button class="modal-btn primary" onclick="submitOrder()">Создать заказ →</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <div class="toast-icon" id="toast-icon">✅</div>
+  <div><div class="toast-title" id="toast-title"></div><div class="toast-sub" id="toast-sub"></div></div>
+</div>
+
+<script>
+// ── ДАННЫЕ ────────────────────────────────────────────────────────────────────
+const STAGES=[
+  {e:'🟢',n:'Заказ создан',c:'green',d:'Врач оформил заявку онлайн.',s:['Загружены фото и сканы','Указан оттенок (Vita/BL)','Заполнено ТЗ','Прикреплены комментарии']},
+  {e:'🟢',n:'Заказ принят лабораторией',c:'green',d:'Заявка проверена, сроки подтверждены.',s:['Заявка проверена','Сроки подтверждены','Назначен техник']},
+  {e:'🟡',n:'Техническая проверка / анализ кейса',c:'yellow',d:'Анализ входных данных.',s:['Проверка качества сканов','Анализ окклюзии','Проверка полноты данных'],warn:true},
+  {e:'🟡',n:'Планирование работы',c:'yellow',d:'Выбор протокола изготовления.',s:['Определён протокол','Работа распределена']},
+  {e:'🔵',n:'Цифровое моделирование (CAD)',c:'blue',d:'Создание 3D-дизайна реставрации.',s:['Импорт STL-сканов','Создание дизайна','Моделировка','Проверка окклюзии']},
+  {e:'🔵',n:'Согласование дизайна',c:'blue',d:'Врач получает 3D-визуализацию.',s:[],approval:true},
+  {e:'🔵',n:'Производство / изготовление',c:'blue',d:'Изготовление реставрации.',s:['Печать (3D)','Фрезеровка (CAM)','Прессование','Нанесение керамики']},
+  {e:'🟠',n:'Индивидуальная работа техника',c:'orange',d:'Финишная персонализация.',s:['Окрашивание','Текстурирование','Персонализация']},
+  {e:'🟠',n:'Контроль качества OWNLAB',c:'orange',d:'Финальная проверка по стандартам.',s:['Проверка посадки','Проверка контактов','Контроль окклюзии','Эстетика']},
+  {e:'🟠',n:'Работа готова',c:'orange',d:'Реставрация готова к отправке.',s:['Фотофиксация','Упаковка']},
+  {e:'🚚',n:'Передана в доставку',c:'delivery',d:'Упакована и передана курьеру.',s:['Упаковка с защитой','Документы оформлены']},
+  {e:'🚚',n:'В пути',c:'delivery',d:'Курьер доставляет в клинику.',s:[],tracking:true},
+  {e:'✅',n:'Получена клиникой',c:'done',d:'Врач подтвердил получение.',s:['Получение подтверждено']},
+  {e:'⭐',n:'Заказ завершён',c:'done',d:'Работа принята, отзыв получен.',s:['Отзыв получен','Архив сформирован']},
+];
+
+const SBADGE={green:'sb-green',yellow:'sb-yellow',blue:'sb-blue',orange:'sb-orange',delivery:'sb-delivery',done:'sb-done'};
+
+let ORDERS=[
+  {id:'o1',num:'#OWN-0051',patient:'Сергеев А.В.',clinic:'Клиника Иванова И.И.',doctor:'Иванов И.И.',type:'10 виниров / е.мах',units:10,shade:'BL1',material:'IPS e.max',teeth:'13,12,11,21,22,23',dl:'24.05.2025',tech:'Артём К.',tk:'Артём',color:'blue',stage:5,prog:43,urgent:true,
+    files:[{n:'scan_upper.stl',i:'🦷'},{n:'scan_lower.stl',i:'🦷'},{n:'photo_pre.jpg',i:'📸'},{n:'tz_client.pdf',i:'📄'}],
+    comments:[{av:'ИЖ',rc:'admin',au:'Иван Ж.',role:'Администратор',t:'Очень важный пациент. Ориентир BL1, без синевы.',time:'09:14'},{av:'АК',rc:'tech',au:'Артём К.',role:'Техник',t:'Принял в работу. Сканы хорошие, приступаю к CAD.',time:'10:32'}]},
+  {id:'o2',num:'#OWN-0052',patient:'Ким Н.В.',clinic:'Дент Плюс',doctor:'Петренко А.А.',type:'4 коронки / цирконий',units:4,shade:'A2',material:'Цирконий Ultra HT',teeth:'15,14,24,25',dl:'29.05.2025',tech:'Мария В.',tk:'Мария',color:'green',stage:2,prog:14,urgent:false,
+    files:[{n:'scans.stl',i:'🦷'},{n:'foto.jpg',i:'📸'}],comments:[{av:'МВ',rc:'tech',au:'Мария В.',role:'Техник',t:'Заказ принят. Сканы отличного качества.',time:'11:00'}]},
+  {id:'o3',num:'#OWN-0053',patient:'Орлова М.С.',clinic:'Стомасервис',doctor:'Захаров П.В.',type:'Мостовидный протез',units:3,shade:'A3',material:'е.мах',teeth:'45,46,47',dl:'31.05.2025',tech:'Дмитрий Н.',tk:'Дмитрий',color:'yellow',stage:3,prog:21,urgent:false,needsData:true,
+    files:[{n:'scan_jaw.stl',i:'🦷'}],comments:[{av:'ДН',rc:'tech',au:'Дмитрий Н.',role:'Техник',t:'⚠️ Скан неполный — нет 47 зуба. Прошу повторный скан.',time:'13:20'}]},
+  {id:'o4',num:'#OWN-0049',patient:'Волков Д.А.',clinic:'Клиника Иванова И.И.',doctor:'Иванов И.И.',type:'6 виниров / е.мах',units:6,shade:'BL2',material:'IPS e.max',teeth:'13,12,11,21,22,23',dl:'22.05.2025',tech:'Артём К.',tk:'Артём',color:'orange',stage:9,prog:86,urgent:true,
+    files:[{n:'scan.stl',i:'🦷'},{n:'cad.3dm',i:'💻'},{n:'ready.jpg',i:'📸'}],comments:[{av:'АК',rc:'tech',au:'Артём К.',role:'Техник',t:'Виниры готовы. Цвет точно в BL2. Финальная QC.',time:'08:10'}]},
+  {id:'o5',num:'#OWN-0048',patient:'Петрова Е.И.',clinic:'Дент Плюс',doctor:'Петренко А.А.',type:'Полная реставрация / 12 ед.',units:12,shade:'A1',material:'Цирконий + е.мах',teeth:'17–27',dl:'21.05.2025',tech:'Мария В.',tk:'Мария',color:'delivery',stage:12,prog:92,urgent:false,trackNum:'СДЭК-847362819',trackSt:'В пути · прибытие сегодня до 18:00',
+    files:[{n:'scan.stl',i:'🦷'},{n:'final.jpg',i:'📸'},{n:'invoice.pdf',i:'📄'}],comments:[{av:'МВ',rc:'tech',au:'Мария В.',role:'Техник',t:'Передала в СДЭК. Трек: СДЭК-847362819.',time:'07:45'}]},
+  {id:'o6',num:'#OWN-0054',patient:'Беляев К.О.',clinic:'Смайл Клиник',doctor:'Горина С.В.',type:'Имплант-корона / цирконий',units:1,shade:'A3.5',material:'Katana UTML',teeth:'36',dl:'05.06.2025',tech:'Дмитрий Н.',tk:'Дмитрий',color:'green',stage:1,prog:7,urgent:false,
+    files:[{n:'scan.stl',i:'🦷'},{n:'xray.jpg',i:'📸'}],comments:[]},
+];
+
+let selId=null, fStatus='all', fTech='all', fSearch='';
+
+// ── РЕНДЕР ЗАКАЗОВ ────────────────────────────────────────────────────────────
+function renderOrders(){
+  const list=document.getElementById('ordersList');
+  const filtered=ORDERS.filter(o=>{
+    const ms=fStatus==='all'||o.color===fStatus;
+    const mt=fTech==='all'||o.tk===fTech;
+    const q=fSearch.toLowerCase();
+    const mq=!q||[o.patient,o.clinic,o.num,o.type].some(v=>v.toLowerCase().includes(q));
+    return ms&&mt&&mq;
+  });
+  if(!filtered.length){list.innerHTML=`<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">Заказы не найдены</div><div>Измените фильтр или создайте новый заказ</div></div>`;return;}
+  list.innerHTML=filtered.map(o=>{
+    const st=STAGES[o.stage-1];
+    return`<div class="order-card c-${o.color}${selId===o.id?' selected':''}" onclick="openDetail('${o.id}')">
+      <div class="c-top">
+        <span class="c-id">${o.num}</span>
+        <span class="c-patient">${o.patient}</span>
+        <span class="c-type">${o.type}</span>
+        <span class="c-dl${o.urgent?' urg':''}">${o.urgent?'⚡ ':''}до ${o.dl}</span>
+      </div>
+      <div class="c-bot">
+        <span class="c-clinic">🏥 ${o.clinic} · ${o.tech}</span>
+        <span class="status-badge ${SBADGE[o.color]}">${st.e} ${st.n}</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${o.prog}%"></div></div>
+    </div>`;
+  }).join('');
+}
+
+// ── ДЕТАЛЬНАЯ ПАНЕЛЬ ──────────────────────────────────────────────────────────
+function openDetail(id){
+  selId=id;
+  const o=ORDERS.find(x=>x.id===id); if(!o) return;
+  document.getElementById('dp-title').textContent=o.patient;
+  document.getElementById('dp-sub').textContent=o.num+' · '+o.clinic;
+  document.getElementById('dp-meta').innerHTML=[o.num,`🦷 ${o.type}`,`👤 ${o.tech}`,o.urgent?'⚡ Срочный':null].filter(Boolean).map(t=>`<span class="meta-tag">${t}</span>`).join('');
+  renderInfoTab(o); renderTL(o); renderFiles(o); renderComments(o);
+  document.getElementById('detPanel').classList.add('open');
+  renderOrders();
+}
+function closeDetail(){selId=null;document.getElementById('detPanel').classList.remove('open');renderOrders();}
+
+function renderInfoTab(o){
+  const rows=[['Номер заказа',o.num,'var(--org)'],['Пациент',o.patient],['Клиника',o.clinic],['Врач',o.doctor||'—'],['Тип работы',o.type],['Единиц',o.units+' ед.'],['Зубы',o.teeth||'—'],['Материал',o.material||'—'],['Оттенок',o.shade||'—'],['Срок','📅 '+o.dl,o.urgent?'var(--red)':'var(--org)']];
+  document.getElementById('dp-info-rows').innerHTML=rows.map(([k,v,c])=>`<div class="info-row"><span class="ik">${k}</span><span class="iv"${c?` style="color:${c}"`:''} >${v}</span></div>`).join('');
+  document.getElementById('dp-stage-lbl').textContent=`Этап ${o.stage} из 14: ${STAGES[o.stage-1].n}`;
+  document.getElementById('dp-pct').textContent=o.prog+'%';
+  document.getElementById('dp-prog').style.width=o.prog+'%';
+  document.getElementById('dp-team').innerHTML=['Техник · '+o.tech,'Менеджер · Ольга Д.','Контроль качества · Иван Ж.'].map(v=>`<div class="info-row"><span class="ik">${v.split('·')[0].trim()}</span><span class="iv">${v.split('·')[1].trim()}</span></div>`).join('');
+}
+
+function gd(n){const d=new Date();d.setDate(d.getDate()-n);return d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'});}
+
+function renderTL(o){
+  let h='';
+  STAGES.forEach((st,i)=>{
+    const n=i+1,isDone=n<o.stage,isAct=n===o.stage,isPend=n>o.stage,isLast=i===13;
+    const isWarn=isAct&&o.needsData&&st.warn;
+    const dc=isWarn?'s-warn':isDone?'s-done':isAct?'s-active':'s-pending';
+    const nc=isWarn?'s-warn':isDone?'s-done':isAct?'s-active':'s-pending';
+    const lc=isDone?'s-done':isAct?'s-active':'s-pending';
+    const dotTxt=isDone?'✓':st.e;
+    let ts=isDone?`<span class="tl-ts">${gd(o.stage-n)}</span>`:isAct?`<span class="tl-ts active">сейчас</span>`:'';
+    let badge=isAct?`<div class="active-badge"><div class="active-dot"></div>АКТИВНЫЙ</div>`:'';
+    let subs='';
+    if(st.s.length&&!isPend){
+      subs='<div class="tl-subs">'+st.s.map((s,si)=>{
+        const sd=isDone||(isAct&&si<Math.ceil(st.s.length/2));
+        return`<div class="tl-sub${sd?' done':''}"><span class="sub-check">${sd?'✓':''}</span>${s}</div>`;
+      }).join('')+'</div>';
+    }
+    let acts='';
+    if(isAct){
+      if(isWarn){acts=`<div class="tl-actions"><button class="tl-btn warn-btn" onclick="doAction('needsData','${o.id}')">⚠️ Требуются данные</button><button class="tl-btn sec">✉️ Написать врачу</button></div>`;}
+      else if(st.approval){acts=`<div class="approval-box"><div class="approval-status">⏳ Ожидает согласования врача</div><div style="font-size:10px;color:var(--t4);margin-bottom:10px">3D-визуализация отправлена врачу ${o.doctor}</div><div class="tl-actions"><button class="tl-btn success" onclick="doAction('approved','${o.id}')">✅ Согласовано</button><button class="tl-btn danger" onclick="doAction('revision','${o.id}')">🔄 На доработку</button><button class="tl-btn sec" onclick="doAction('resend','${o.id}')">📩 Повторно</button></div></div>`;}
+      else if(st.tracking){acts=`<div class="tracking-box"><div style="font-size:10px;color:var(--t3)">Трек-номер:</div><div class="tracking-num">${o.trackNum||'—'}</div><div class="tracking-status-txt">${o.trackSt||''}</div></div><div class="tl-actions"><button class="tl-btn success" onclick="doAction('received','${o.id}')">✅ Клиника получила</button><button class="tl-btn purple-btn" onclick="doAction('track','${o.id}')">🔍 Отследить</button></div>`;}
+      else if(n<13){acts=`<div class="tl-actions"><button class="tl-btn primary" onclick="doAction('next','${o.id}')">Следующий этап →</button><button class="tl-btn sec" onclick="doAction('photo','${o.id}')">📸 Добавить фото</button></div>`;}
+    }
+    const desc=!isPend?`<div class="tl-desc${isAct?' active':''}">${st.d}</div>`:'';
+    h+=`<div class="tl-item"><div class="tl-left"><div class="tl-dot ${dc}" style="font-size:${isDone?'13px':'10px'}">${dotTxt}</div>${!isLast?`<div class="tl-line ${lc}"></div>`:''}</div><div class="tl-content"><div class="tl-row"><div class="tl-name ${nc}">${st.n}</div>${badge}${ts}</div>${desc}${subs}${acts}</div></div>`;
+  });
+  document.getElementById('dp-tl').innerHTML=h;
+  setTimeout(()=>{const a=document.querySelector('.active-badge');if(a)a.scrollIntoView({behavior:'smooth',block:'center'});},100);
+}
+
+function renderFiles(o){
+  const icons={stl:'🦷','3dm':'💻',jpg:'📸',png:'📸',pdf:'📄'};
+  document.getElementById('dp-files').innerHTML=(o.files||[]).map(f=>{const ext=f.n.split('.').pop().toLowerCase();return`<div class="file-item" onclick="showToast('${f.n}','Открытие файла')"><span class="file-icon">${icons[ext]||f.i}</span><div class="file-name">${f.n}</div></div>`;}).join('');
+}
+
+function renderComments(o){
+  const c=document.getElementById('dp-comments');
+  if(!(o.comments?.length)){c.innerHTML=`<div style="text-align:center;padding:40px 0;color:var(--t4)"><div style="font-size:30px;margin-bottom:10px">💬</div><div style="font-weight:600;color:var(--t3)">Комментариев пока нет</div></div>`;return;}
+  c.innerHTML=o.comments.map(cm=>`<div class="comment-item"><div class="c-av ${cm.rc}">${cm.av}</div><div class="c-bubble"><div class="c-meta"><span class="c-author">${cm.au}</span><span class="c-role">${cm.role}</span><span class="c-time">${cm.time}</span></div><div class="c-text">${cm.t}</div></div></div>`).join('');
+  c.scrollTop=c.scrollHeight;
+}
+
+function sendComment(){
+  const inp=document.getElementById('commentInput');
+  const txt=inp.value.trim(); if(!txt||!selId) return;
+  const o=ORDERS.find(x=>x.id===selId); if(!o) return;
+  o.comments.push({av:'ИЖ',rc:'admin',au:'Иван Ж.',role:'Администратор',t:txt,time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})});
+  inp.value=''; renderComments(o); showToast('Отправлено','Техник уведомлён');
+}
+
+document.getElementById('commentInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))sendComment();});
+
+// ── ДЕЙСТВИЯ ──────────────────────────────────────────────────────────────────
+function doAction(action,id){
+  const o=ORDERS.find(x=>x.id===id); if(!o) return;
+  if(action==='next'&&o.stage<14){
+    o.stage++; o.prog=Math.min(100,Math.round((o.stage/14)*100));
+    o.color=STAGES[o.stage-1].c;
+    renderOrders(); openDetail(id); showToast('Этап обновлён','Этап '+o.stage+': '+STAGES[o.stage-1].n);
+  } else if(action==='needsData') showToast('Запрос данных','Уведомление отправлено врачу '+o.doctor,'warning');
+  else if(action==='approved'){showToast('Дизайн согласован ✅','Запускаем производство');setTimeout(()=>doAction('next',id),400);}
+  else if(action==='revision') showToast('На доработку 🔄','Техник уведомлён','warning');
+  else if(action==='resend') showToast('Визуализация отправлена 📩','На email врача');
+  else if(action==='received'){showToast('Клиника получила ✅','Завершаем заказ');setTimeout(()=>doAction('next',id),400);}
+  else if(action==='track') showToast('Трекинг',o.trackNum||'—');
+  else if(action==='photo') showToast('Фото','Доступно в полной версии');
+}
+
+// ── ТАБЫ ──────────────────────────────────────────────────────────────────────
+function switchTab(id,el){
+  document.querySelectorAll('.det-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  if(el)el.classList.add('active');
+  const pane=document.getElementById('tab-'+id); if(pane)pane.classList.add('active');
+}
+
+// ── ФИЛЬТРЫ ───────────────────────────────────────────────────────────────────
+function filterStatus(s,el){
+  fStatus=s;
+  document.querySelectorAll('.nav-item[onclick*="filterStatus"]').forEach(i=>i.classList.remove('active'));
+  el.classList.add('active'); renderOrders();
+}
+function filterTech(t,el){
+  fTech=t;
+  document.querySelectorAll('.nav-item[onclick*="filterTech"]').forEach(i=>i.classList.remove('active'));
+  el.classList.add('active'); renderOrders();
+}
+function searchOrders(q){fSearch=q;renderOrders();}
+
+// ── МОДАЛКА ───────────────────────────────────────────────────────────────────
+function openModal(){document.getElementById('modalOverlay').classList.add('open');}
+function closeModal(){document.getElementById('modalOverlay').classList.remove('open');}
+function onOverlayClick(e){if(e.target===document.getElementById('modalOverlay'))closeModal();}
+
+function submitOrder(){
+  const req=[{id:'f-patient',l:'Пациент'},{id:'f-clinic',l:'Клиника'},{id:'f-type',l:'Тип работы'},{id:'f-units',l:'Количество'},{id:'f-deadline',l:'Срок'}];
+  for(const f of req){if(!document.getElementById(f.id).value.trim()){showToast('Заполните поле',f.l+' — обязательное','error');document.getElementById(f.id).focus();return;}}
+  const types={veneers_emax:'Виниры (е.мах)',crown_zirconia:'Коронки (цирконий)',crown_emax:'Коронки (е.мах)',bridge:'Мостовидный протез',implant_crown:'Имплант-корона',full_mouth:'Полная реставрация',temp:'Временные (ПММА)'};
+  const techs={artem:'Артём К.',maria:'Мария В.',dmitry:'Дмитрий Н.'};
+  const num='#OWN-0'+(55+ORDERS.length);
+  const dlRaw=document.getElementById('f-deadline').value;
+  const dl=dlRaw?new Date(dlRaw).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'}):'—';
+  const techVal=document.getElementById('f-tech').value;
+  const newO={id:'o'+Date.now(),num,patient:document.getElementById('f-patient').value.trim(),clinic:document.getElementById('f-clinic').value.trim(),doctor:document.getElementById('f-doctor').value.trim()||'—',type:types[document.getElementById('f-type').value]||document.getElementById('f-type').value,units:parseInt(document.getElementById('f-units').value)||1,shade:document.getElementById('f-shade').value||'—',material:document.getElementById('f-material').value||'—',teeth:document.getElementById('f-teeth').value||'—',dl,tech:techs[techVal]||'—',tk:(techs[techVal]||'').split(' ')[0],color:'green',stage:1,prog:4,urgent:document.getElementById('f-priority').value==='urgent',files:[],comments:[]};
+  ORDERS.unshift(newO); closeModal(); renderOrders(); openDetail(newO.id);
+  showToast('✅ Заказ создан · '+num,'Уведомление отправлено');
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────────────────
+let toastTimer=null;
+function showToast(title,sub='',type='success'){
+  const t=document.getElementById('toast');
+  const icons={success:'✅',error:'❌',warning:'⚠️'};
+  document.getElementById('toast-icon').textContent=icons[type]||'✅';
+  document.getElementById('toast-title').textContent=title;
+  document.getElementById('toast-sub').textContent=sub;
+  const colors={success:'var(--teal)',error:'var(--red)',warning:'var(--yellow)'};
+  t.style.borderLeft='3px solid '+(colors[type]||colors.success);
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),3400);
+}
+
+// ── КЛАВИШИ ───────────────────────────────────────────────────────────────────
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDetail();closeModal();}});
+
+// ── СТАРТ ─────────────────────────────────────────────────────────────────────
+renderOrders();
+openDetail('o1');
+switchTab('timeline', document.querySelectorAll('.det-tab')[1]);
+</script>
+</body>
+</html>
