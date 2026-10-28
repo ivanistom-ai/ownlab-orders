@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OWNLAB — Стандарт работы техника</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0e0e0e;
+    --surface: #161616;
+    --surface2: #1e1e1e;
+    --border: #2a2a2a;
+    --accent: #E87722;
+    --accent-dim: rgba(232,119,34,0.12);
+    --text: #f0f0f0;
+    --muted: #666;
+    --green: #3ecf8e;
+    --red: #ff4d4d;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --display: 'Bebas Neue', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 40px 20px 80px;
+  }
+
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
+  /* HEADER */
+  .header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 48px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo-block .logo {
+    font-family: var(--display);
+    font-size: 52px;
+    letter-spacing: 2px;
+    line-height: 1;
+  }
+  .logo .own { color: var(--accent); }
+  .logo .lab { color: #888; }
+
+  .logo-block .sub {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .header-right {
+    text-align: right;
+  }
+  .header-right .doc-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .header-right .doc-code {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    margin-top: 4px;
+  }
+
+  /* PROGRESS BAR */
+  .progress-wrap {
+    margin-bottom: 40px;
+  }
+  .progress-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .progress-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .progress-count {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+  }
+  .progress-bar-bg {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+    width: 0%;
+  }
+
+  /* STAGE BLOCK */
+  .stage {
+    margin-bottom: 32px;
+  }
+
+  .stage-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+
+  .stage-num {
+    font-family: var(--display);
+    font-size: 36px;
+    color: var(--accent);
+    opacity: 0.3;
+    line-height: 1;
+    min-width: 36px;
+  }
+
+  .stage-title {
+    font-family: var(--display);
+    font-size: 22px;
+    letter-spacing: 1.5px;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .stage-badge {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: 1px solid rgba(232,119,34,0.25);
+    padding: 3px 8px;
+    border-radius: 3px;
+    margin-left: auto;
+  }
+
+  /* CHECKLIST ITEMS */
+  .checklist {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+    user-select: none;
+  }
+
+  .check-item:last-child { border-bottom: none; }
+
+  .check-item:hover { background: var(--surface2); }
+
+  .check-item.done { background: rgba(62,207,142,0.04); }
+  .check-item.done .item-label { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(255,255,255,0.15); }
+
+  .checkbox {
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    flex-shrink: 0;
+    margin-top: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    font-size: 11px;
+    color: transparent;
+  }
+
+  .check-item.done .checkbox {
+    background: var(--green);
+    border-color: var(--green);
+    color: #000;
+  }
+
+  .item-content { flex: 1; }
+
+  .item-label {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text);
+    line-height: 1.4;
+    transition: color 0.15s;
+  }
+
+  .item-note {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+
+  .item-tag {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 2px 7px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  /* DIVIDER */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 40px 0 32px;
+  }
+  .divider-line { flex: 1; height: 1px; background: var(--border); }
+  .divider-text {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  /* RESET BUTTON */
+  .actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+
+  .btn {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 12px 24px;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+    font-weight: 500;
+  }
+  .btn-primary:hover { background: #ff8c33; }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* STATUS PILL */
+  .status-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 32px;
+  }
+  .pill {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .pill.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  /* COMPLETION STATE */
+  .completion-banner {
+    display: none;
+    background: rgba(62,207,142,0.08);
+    border: 1px solid rgba(62,207,142,0.25);
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-bottom: 32px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--green);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .completion-banner.show { display: block; }
+
+  /* PRINT STYLES */
+  @media print {
+    body { background: #fff; color: #000; padding: 20px; }
+    .actions { display: none; }
+    .stage-num { color: #E87722; }
+    .stage-title { color: #111; }
+    .checklist { border-color: #ddd; }
+    .check-item { border-color: #eee; }
+    .item-label { color: #111; }
+    .logo .own { color: #E87722; }
+    .logo .lab { color: #888; }
+    .progress-bar-bg { background: #eee; }
+    .item-note { color: #888; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo-block">
+      <div class="logo"><span class="own">OWN</span><span class="lab">LAB</span></div>
+      <div class="sub">Digital Laboratory</div>
+    </div>
+    <div class="header-right">
+      <div class="doc-title">Стандартная операционная процедура</div>
+      <div class="doc-code">SOP-TECH-001 / REV.1</div>
+    </div>
+  </div>
+
+  <!-- STATUS PILLS -->
+  <div class="status-row">
+    <div class="pill active">Прием заказа</div>
+    <div class="pill">Регистрация</div>
+    <div class="pill">Файлы</div>
+    <div class="pill">Исполнение</div>
+    <div class="pill">Контроль</div>
+    <div class="pill">Сдача</div>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="progress-wrap">
+    <div class="progress-meta">
+      <div class="progress-label">Выполнено шагов</div>
+      <div class="progress-count" id="prog-count">0 / 0</div>
+    </div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="prog-bar"></div>
+    </div>
+  </div>
+
+  <!-- COMPLETION BANNER -->
+  <div class="completion-banner" id="completion-banner">
+    ✓ &nbsp; Все шаги выполнены — заказ готов к сдаче
+  </div>
+
+  <!-- ========== ЭТАП 1 ========== -->
+  <div class="stage">
+    <div class="stage-header">
+      <div class="stage-num">01</div>
+      <div class="stage-title">ПРИЕМ ЗАКАЗА</div>
+      <div class="stage-badge">Входящий контроль</div>
+    </div>
+    <div class="checklist" data-stage="1">
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Получено уведомление о новом заказе (мессенджер / система)</div>
+          <div class="item-note">Телеграм-бот / CRM — проверить статус "Новый"</div>
+        </div>
+        <div class="item-tag">Уведомление</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Проверен наряд-заказ: клиника, врач, пациент, тип работы, срок</div>
+          <div class="item-note">Убедиться, что все поля заполнены. Если чего-то нет — запросить до начала работы</div>
+        </div>
+        <div class="item-tag">Наряд</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Физические материалы приняты: слепки / модели / сканы / прикусные шаблоны</div>
+          <div class="item-note">Проверить комплектность относительно наряда. Дефекты — фотофиксация</div>
+        </div>
+        <div class="item-tag">Материалы</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Визуально оценено качество оттисков / моделей: нет пузырей, разрывов, деформаций</div>
+          <div class="item-note">При дефекте — сразу уведомить врача. Зафиксировать фото</div>
+        </div>
+        <div class="item-tag">Контроль</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Подтвержден срок сдачи работы</div>
+          <div class="item-note">Техник ставит статус "Принято в работу" — время фиксируется автоматически</div>
+        </div>
+        <div class="item-tag">Срок</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="divider">
+    <div class="divider-line"></div>
+    <div class="divider-text">Регистрация</div>
+    <div class="divider-line"></div>
+  </div>
+
+  <!-- ========== ЭТАП 2 ========== -->
+  <div class="stage">
+    <div class="stage-header">
+      <div class="stage-num">02</div>
+      <div class="stage-title">РЕГИСТРАЦИЯ В СИСТЕМЕ</div>
+      <div class="stage-badge">Обязательно</div>
+    </div>
+    <div class="checklist" data-stage="2">
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Создана карточка заказа в системе учета (CRM / таблица)</div>
+          <div class="item-note">Поля: №заказа, дата, клиника, врач, ФИО пациента, тип конструкции, цвет, материал, срок</div>
+        </div>
+        <div class="item-tag">CRM</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Присвоен уникальный номер заказа по формату: YYYYMMDD-КОД_КЛИНИКИ-###</div>
+          <div class="item-note">Пример: 20250608-ECB-047 — этот номер используется везде</div>
+        </div>
+        <div class="item-tag">Нумерация</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Статус заказа установлен: "В работе"</div>
+          <div class="item-note">Дата и время приема зафиксированы. Техник назначен</div>
+        </div>
+        <div class="item-tag">Статус</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Врач / клиника уведомлены о принятии заказа в работу</div>
+          <div class="item-note">Сообщение в Телеграм с подтверждением срока</div>
+        </div>
+        <div class="item-tag">Связь</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="divider">
+    <div class="divider-line"></div>
+    <div class="divider-text">Файлы пациента</div>
+    <div class="divider-line"></div>
+  </div>
+
+  <!-- ========== ЭТАП 3 ========== -->
+  <div class="stage">
+    <div class="stage-header">
+      <div class="stage-num">03</div>
+      <div class="stage-title">СОЗДАНИЕ ПАПКИ ПАЦИЕНТА</div>
+      <div class="stage-badge">Файловый стандарт</div>
+    </div>
+    <div class="checklist" data-stage="3">
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Создана папка по стандарту: [№заказа]_[Фамилия_пациента]</div>
+          <div class="item-note">Пример: 20250608-ECB-047_Иванов&nbsp; — только латиница или кириллица без пробелов</div>
+        </div>
+        <div class="item-tag">Папка</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Внутри созданы подпапки: /SCAN / /STL / /PROJECT / /EXPORT / /PHOTOS / /DOCS</div>
+          <div class="item-note">Структура не меняется — одинакова для всех заказов</div>
+        </div>
+        <div class="item-tag">Структура</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Скачаны и размещены все входящие файлы от клиники</div>
+          <div class="item-note">Скан-данные (.STL/.PLY/.DCM), фото прикуса, ТЗ врача — в соответствующие подпапки</div>
+        </div>
+        <div class="item-tag">Загрузка</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Все файлы переименованы по стандарту: тип_зуб_дата</div>
+          <div class="item-note">Пример: scan_upper_20250608.stl — никаких "file(2)" или "скан верхняя"</div>
+        </div>
+        <div class="item-tag">Нейминг</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">В папке /DOCS размещена копия наряд-заказа (PDF или скриншот)</div>
+        </div>
+        <div class="item-tag">Наряд</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Папка синхронизирована в облако (Google Drive / Яндекс.Диск)</div>
+          <div class="item-note">Проверить, что файлы доступны руководителю лаборатории</div>
+        </div>
+        <div class="item-tag">Облако</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="divider">
+    <div class="divider-line"></div>
+    <div class="divider-text">Исполнение работы</div>
+    <div class="divider-line"></div>
+  </div>
+
+  <!-- ========== ЭТАП 4 ========== -->
+  <div class="stage">
+    <div class="stage-header">
+      <div class="stage-num">04</div>
+      <div class="stage-title">ВЫПОЛНЕНИЕ РАБОТЫ</div>
+      <div class="stage-badge">Производство</div>
+    </div>
+    <div class="checklist" data-stage="4">
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Проверено ТЗ перед началом: цвет, материал, размер, особые пожелания врача</div>
+          <div class="item-note">При любых сомнениях — уточнять у врача ДО начала, не после</div>
+        </div>
+        <div class="item-tag">ТЗ</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Рабочий файл проекта сохранен в папку /PROJECT с именем: project_v1</div>
+          <div class="item-note">Каждая значимая версия: project_v2, project_final — без удаления предыдущих</div>
+        </div>
+        <div class="item-tag">Версии</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Сделан промежуточный скриншот / рендер для внутренней проверки (если работа > 4 часов)</div>
+        </div>
+        <div class="item-tag">Контроль</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Финальный файл для производства (.STL / .3MF / .CAM) сохранен в /EXPORT</div>
+          <div class="item-note">Имя файла: export_final_[дата].stl — только готовый к печати / фрезеровке</div>
+        </div>
+        <div class="item-tag">Экспорт</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Фото готовой работы (до отправки) сделано и помещено в /PHOTOS</div>
+          <div class="item-note">Минимум 3 ракурса: фас, профиль, окклюзия. Нейтральный фон</div>
+        </div>
+        <div class="item-tag">Фото</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="divider">
+    <div class="divider-line"></div>
+    <div class="divider-text">Учет материалов</div>
+    <div class="divider-line"></div>
+  </div>
+
+  <!-- ========== ЭТАП 5 ========== -->
+  <div class="stage">
+    <div class="stage-header">
+      <div class="stage-num">05</div>
+      <div class="stage-title">ОТЧЕТ ПО МАТЕРИАЛАМ</div>
+      <div class="stage-badge">Учет расходников</div>
+    </div>
+    <div class="checklist" data-stage="5">
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Заполнена карточка использованных материалов по заказу</div>
+          <div class="item-note">Позиции: наименование, количество, единица измерения (г / мл / шт)</div>
+        </div>
+        <div class="item-tag">Карточка</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Указан расход материала для печати / фрезеровки: граммы, блоки, диски</div>
+        </div>
+        <div class="item-tag">Расход</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Отмечен брак (при наличии): материал, причина, количество</div>
+          <div class="item-note">Брак фиксируется без скрытия — это данные для оптимизации</div>
+        </div>
+        <div class="item-tag">Брак</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Карточка материалов прикреплена к карточке заказа в CRM</div>
+        </div>
+        <div class="item-tag">CRM</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="divider">
+    <div class="divider-line"></div>
+    <div class="divider-text">Контроль качества</div>
+    <div class="divider-line"></div>
+  </div>
+
+  <!-- ========== ЭТАП 6 ========== -->
+  <div class="stage">
+    <div class="stage-header">
+      <div class="stage-num">06</div>
+      <div class="stage-title">КОНТРОЛЬ КАЧЕСТВА</div>
+      <div class="stage-badge">QC обязателен</div>
+    </div>
+    <div class="checklist" data-stage="6">
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Работа проверена по чек-листу конкретного типа конструкции</div>
+          <div class="item-note">Коронка / виниры / сплинт / протез — у каждого свой QC-лист</div>
+        </div>
+        <div class="item-tag">QC-лист</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Проверен цвет: соответствует ключу из ТЗ, сделан фотосравнительный снимок</div>
+        </div>
+        <div class="item-tag">Цвет</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Проверена краевая посадка: нет щелей, сколов, неровностей края</div>
+        </div>
+        <div class="item-tag">Посадка</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Проверена окклюзионная поверхность: анатомия, контакты соответствуют ТЗ</div>
+        </div>
+        <div class="item-tag">Окклюзия</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Внешний осмотр: нет пор, трещин, следов поддержек, мутных участков</div>
+        </div>
+        <div class="item-tag">Внешний вид</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Если есть замечания — исправлено ДО отправки или согласовано с руководителем</div>
+          <div class="item-note">Никакой работы с дефектами без уведомления старшего техника / руководителя</div>
+        </div>
+        <div class="item-tag">Исправление</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="divider">
+    <div class="divider-line"></div>
+    <div class="divider-text">Закрытие заказа</div>
+    <div class="divider-line"></div>
+  </div>
+
+  <!-- ========== ЭТАП 7 ========== -->
+  <div class="stage">
+    <div class="stage-header">
+      <div class="stage-num">07</div>
+      <div class="stage-title">СДАЧА И ЗАКРЫТИЕ</div>
+      <div class="stage-badge">Финал</div>
+    </div>
+    <div class="checklist" data-stage="7">
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Работа упакована по стандарту OWNLAB (коробка, маркировка, № заказа)</div>
+          <div class="item-note">Наклейка: № заказа, тип работы, пациент, клиника, дата готовности</div>
+        </div>
+        <div class="item-tag">Упаковка</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Статус в системе переведен в "Готово к отправке"</div>
+        </div>
+        <div class="item-tag">Статус</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Врач / клиника уведомлены о готовности работы</div>
+          <div class="item-note">Телеграм: "Заказ №XX готов. Фото прилагаю." + 1-2 фото финала</div>
+        </div>
+        <div class="item-tag">Уведомление</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Все файлы заказа синхронизированы в облаке (финальная версия)</div>
+          <div class="item-note">Папка пациента закрывается — больше не редактируется без разрешения</div>
+        </div>
+        <div class="item-tag">Архив</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Время выполнения заказа зафиксировано (факт vs план)</div>
+          <div class="item-note">Метрика: сколько часов реально ушло — данные для анализа производительности</div>
+        </div>
+        <div class="item-tag">Время</div>
+      </div>
+
+      <div class="check-item" onclick="toggle(this)">
+        <div class="checkbox">✓</div>
+        <div class="item-content">
+          <div class="item-label">Статус заказа переведен в "Выдано" после подтверждения получения клиникой</div>
+        </div>
+        <div class="item-tag">Закрытие</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ACTIONS -->
+  <div class="actions">
+    <button class="btn btn-primary" onclick="window.print()">Распечатать / PDF</button>
+    <button class="btn btn-ghost" onclick="resetAll()">Сбросить все отметки</button>
+  </div>
+
+</div>
+
+<script>
+  function toggle(el) {
+    el.classList.toggle('done');
+    updateProgress();
+  }
+
+  function updateProgress() {
+    const all = document.querySelectorAll('.check-item');
+    const done = document.querySelectorAll('.check-item.done');
+    const total = all.length;
+    const count = done.length;
+    const pct = total ? Math.round((count / total) * 100) : 0;
+
+    document.getElementById('prog-count').textContent = count + ' / ' + total;
+    document.getElementById('prog-bar').style.width = pct + '%';
+
+    const banner = document.getElementById('completion-banner');
+    if (count === total && total > 0) {
+      banner.classList.add('show');
+    } else {
+      banner.classList.remove('show');
+    }
+
+    // Update pills
+    const stages = document.querySelectorAll('.checklist');
+    const pills = document.querySelectorAll('.pill');
+    stages.forEach(function(stage, i) {
+      const items = stage.querySelectorAll('.check-item');
+      const doneItems = stage.querySelectorAll('.check-item.done');
+      if (pills[i]) {
+        if (doneItems.length === items.length && items.length > 0) {
+          pills[i].classList.add('active');
+        } else {
+          pills[i].classList.remove('active');
+        }
+      }
+    });
+  }
+
+  function resetAll() {
+    document.querySelectorAll('.check-item.done').forEach(function(el) {
+      el.classList.remove('done');
+    });
+    updateProgress();
+  }
+
+  // Init
+  updateProgress();
+</script>
+</body>
+</html>

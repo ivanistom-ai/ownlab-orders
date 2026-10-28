@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OWNLAB SPLINT AI</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;700&family=Manrope:wght@300;400;500;600;700;800&display=swap');
+:root{
+  --bg:#07070a;--s1:#0e0e12;--s2:#14141a;--s3:#1b1b22;--s4:#22222c;
+  --b0:rgba(255,255,255,0.04);--b1:rgba(255,255,255,0.07);--b2:rgba(255,255,255,0.12);
+  --or:#FF7A00;--or2:#FFAA44;--or-bg:rgba(255,122,0,0.09);--or-brd:rgba(255,122,0,0.28);
+  --txt:#EEEEF2;--txt2:#80808e;--txt3:#3e3e4e;
+  --green:#2DD07A;--red:#F05050;--blue:#60AAFF;
+  --mono:'IBM Plex Mono',monospace;--body:'Manrope',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--body);overflow:hidden;}
+
+/* ── SHELL ── */
+.shell{height:100vh;display:grid;grid-template-rows:52px 1fr;}
+
+/* ── HEADER ── */
+header{
+  display:flex;align-items:center;padding:0 28px;gap:16px;
+  background:var(--s1);border-bottom:1px solid var(--b1);
+  position:sticky;top:0;z-index:100;
+}
+.logo{font-family:var(--mono);font-size:13px;letter-spacing:.1em;display:flex;align-items:center;gap:5px;}
+.lo{color:var(--or);font-weight:700;}.ll{color:var(--txt3);}
+.lp{font-size:10px;font-weight:700;letter-spacing:.14em;color:#000;background:var(--or);padding:2px 7px;border-radius:2px;}
+.h-steps{display:flex;margin-left:8px;}
+.hs{
+  display:flex;align-items:center;gap:7px;padding:0 14px;height:52px;
+  font-size:10px;font-family:var(--mono);color:var(--txt3);
+  border-bottom:2px solid transparent;cursor:pointer;transition:all .2s;white-space:nowrap;
+}
+.hs.active{color:var(--or);border-bottom-color:var(--or);}
+.hs.done{color:var(--green);}
+.hn{width:18px;height:18px;border-radius:50%;background:var(--s3);color:var(--txt3);
+  display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;transition:all .2s;}
+.hs.active .hn{background:var(--or-bg);color:var(--or);border:1px solid var(--or-brd);}
+.hs.done .hn{background:rgba(45,208,122,.15);color:var(--green);}
+.h-sep{flex:1;}
+.h-tag{font-size:10px;font-family:var(--mono);color:var(--txt3);}
+
+/* ── MAIN ── */
+main{display:grid;grid-template-columns:360px 1fr;height:calc(100vh - 52px);overflow:hidden;}
+
+/* ── FORM PANEL ── */
+.fp{background:var(--s1);border-right:1px solid var(--b1);display:flex;flex-direction:column;overflow-y:auto;}
+.fp::-webkit-scrollbar{width:3px;}.fp::-webkit-scrollbar-thumb{background:var(--s4);}
+.sp{display:none;flex-direction:column;}
+.sp.on{display:flex;}
+.fb{padding:18px 22px;border-bottom:1px solid var(--b0);}
+.fb-t{font-size:9px;font-family:var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--txt3);margin-bottom:12px;}
+
+/* Upload zones */
+.up2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.uz{
+  border:1px dashed var(--b2);border-radius:10px;padding:20px 14px;
+  display:flex;flex-direction:column;align-items:center;text-align:center;
+  cursor:pointer;transition:all .25s;background:var(--s2);position:relative;overflow:hidden;
+}
+.uz::after{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse 80% 60% at 50% 110%,rgba(255,122,0,.12),transparent);
+  opacity:0;transition:opacity .3s;
+}
+.uz:hover{border-color:var(--or-brd);background:var(--s3);}
+.uz:hover::after{opacity:1;}
+.uz.ok{border-color:rgba(45,208,122,.35);border-style:solid;}
+.uz.ok::after{background:radial-gradient(ellipse 80% 60% at 50% 110%,rgba(45,208,122,.08),transparent);opacity:1;}
+.uz-i{font-size:22px;margin-bottom:8px;opacity:.35;transition:all .2s;}
+.uz:hover .uz-i,.uz.ok .uz-i{opacity:.9;transform:translateY(-2px);}
+.uz-n{font-size:11px;font-weight:600;margin-bottom:3px;}
+.uz-s{font-size:9px;color:var(--txt2);line-height:1.4;}
+.uz-b{margin-top:8px;font-size:8px;font-family:var(--mono);padding:2px 7px;border-radius:3px;background:var(--s4);color:var(--txt3);border:1px solid var(--b1);}
+.uz-b.ok{background:rgba(45,208,122,.1);color:var(--green);border-color:rgba(45,208,122,.2);}
+
+/* Device grid */
+.dg{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.dc{
+  padding:12px 11px;border:1px solid var(--b1);border-radius:8px;
+  background:var(--s2);cursor:pointer;transition:all .2s;position:relative;overflow:hidden;
+}
+.dc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--or);transform:scaleX(0);transform-origin:left;transition:transform .2s;}
+.dc:hover{border-color:var(--b2);background:var(--s3);}
+.dc.sel{border-color:var(--or-brd);background:var(--or-bg);}
+.dc.sel::before{transform:scaleX(1);}
+.dc-n{font-size:11px;font-weight:700;margin-bottom:3px;}
+.dc-s{font-size:9px;color:var(--txt2);line-height:1.4;}
+.dc-t{display:inline-block;margin-top:5px;font-size:8px;font-family:var(--mono);color:var(--or);opacity:.6;}
+.dc.sel .dc-t{opacity:1;}
+
+/* Toggles & sliders */
+.sw{margin-bottom:12px;}
+.sw-h{display:flex;justify-content:space-between;margin-bottom:5px;}
+.sw-l{font-size:11px;color:var(--txt2);}
+.sw-v{font-size:11px;font-family:var(--mono);color:var(--or);font-weight:500;}
+input[type=range]{width:100%;height:3px;-webkit-appearance:none;background:var(--s4);border-radius:2px;outline:none;cursor:pointer;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--or);cursor:pointer;box-shadow:0 0 8px rgba(255,122,0,.5);}
+.tf{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}
+.tf-l{font-size:11px;color:var(--txt2);}
+.tg{width:34px;height:18px;background:var(--s4);border-radius:9px;position:relative;cursor:pointer;transition:background .2s;border:1px solid var(--b1);}
+.tg.on{background:var(--or);}
+.tg-t{width:12px;height:12px;background:#fff;border-radius:50%;position:absolute;top:2px;left:2px;transition:transform .2s;box-shadow:0 1px 4px rgba(0,0,0,.4);}
+.tg.on .tg-t{transform:translateX(16px);}
+.rg{display:flex;gap:6px;flex-wrap:wrap;}
+.rb{padding:4px 10px;border-radius:4px;border:1px solid var(--b1);background:var(--s2);font-size:10px;font-family:var(--mono);color:var(--txt2);cursor:pointer;transition:all .15s;}
+.rb:hover{border-color:var(--b2);color:var(--txt);}
+.rb.s{background:var(--or-bg);border-color:var(--or-brd);color:var(--or);}
+.nr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.nr-l{font-size:11px;color:var(--txt2);}
+.ni{display:flex;align-items:center;background:var(--s3);border:1px solid var(--b1);border-radius:5px;overflow:hidden;}
+.nb{width:26px;height:26px;border:none;background:transparent;color:var(--txt2);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.nb:hover{background:var(--s4);color:var(--txt);}
+.nv{width:44px;text-align:center;font-family:var(--mono);font-size:11px;font-weight:500;color:var(--txt);background:transparent;border:none;outline:none;border-left:1px solid var(--b0);border-right:1px solid var(--b0);}
+.ib{background:var(--s2);border:1px solid var(--b1);border-radius:8px;padding:10px 12px;display:flex;gap:9px;}
+.ib-i{font-size:13px;flex-shrink:0;margin-top:1px;}
+.ib-t{font-size:10px;color:var(--txt2);line-height:1.6;}
+.ib-t strong{color:var(--txt);font-weight:600;}
+
+/* Buttons */
+.ff{padding:14px 22px;border-top:1px solid var(--b1);background:var(--s1);flex-shrink:0;display:flex;gap:9px;}
+.bp{
+  flex:1;padding:12px 18px;background:var(--or);color:#000;border:none;border-radius:8px;
+  font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.08em;
+  cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:7px;
+  position:relative;overflow:hidden;
+}
+.bp:hover{background:var(--or2);transform:translateY(-1px);box-shadow:0 8px 24px rgba(255,122,0,.3);}
+.bs{padding:12px 14px;background:transparent;color:var(--txt2);border:1px solid var(--b2);border-radius:8px;font-family:var(--mono);font-size:10px;cursor:pointer;transition:all .15s;}
+.bs:hover{background:var(--s2);color:var(--txt);}
+
+/* Result cards */
+.rc{display:flex;align-items:flex-start;gap:9px;padding:9px 11px;background:var(--s2);border:1px solid var(--b1);border-radius:8px;margin-bottom:7px;}
+.rc.crit{border-left:3px solid var(--green);}
+.rc.warn{border-left:3px solid var(--or);}
+.rc-n{font-size:11px;font-weight:600;margin-bottom:2px;}
+.rc-s{font-size:9px;color:var(--txt2);}
+.rstat{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:12px;}
+.rs{background:var(--s2);border:1px solid var(--b1);border-radius:8px;padding:10px 12px;}
+.rs-v{font-size:17px;font-family:var(--mono);font-weight:700;}
+.rs-l{font-size:8px;color:var(--txt3);font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;margin-top:2px;}
+
+/* ── VIEWPORT ── */
+.vp{display:flex;flex-direction:column;background:var(--bg);position:relative;overflow:hidden;}
+.vt{height:42px;background:var(--s1);border-bottom:1px solid var(--b1);display:flex;align-items:center;padding:0 18px;gap:10px;flex-shrink:0;}
+.vt-t{font-size:10px;font-family:var(--mono);color:var(--txt3);letter-spacing:.1em;}
+.pill{padding:3px 9px;border-radius:10px;font-size:9px;font-family:var(--mono);font-weight:700;letter-spacing:.06em;}
+.pill-w{background:rgba(255,255,255,.05);color:var(--txt3);}
+.pill-p{background:rgba(255,122,0,.1);color:var(--or);border:1px solid rgba(255,122,0,.2);}
+.pill-d{background:rgba(45,208,122,.1);color:var(--green);border:1px solid rgba(45,208,122,.2);}
+.vt-f{font-size:9px;font-family:var(--mono);color:var(--txt3);margin-left:auto;}
+
+/* VIEW BUTTONS */
+.vb-grp{display:flex;gap:4px;}
+.vb{height:24px;padding:0 9px;border-radius:4px;border:1px solid var(--b1);background:transparent;color:var(--txt2);font-size:9px;font-family:var(--mono);cursor:pointer;transition:all .15s;}
+.vb:hover{background:var(--s2);color:var(--txt);}
+.vb.a{background:var(--or-bg);color:var(--or);border-color:var(--or-brd);}
+
+/* CANVAS AREA */
+.cw{flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+/* Grid */
+.cw::before{
+  content:'';position:absolute;inset:0;
+  background-image:linear-gradient(rgba(255,255,255,.016) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.016) 1px,transparent 1px);
+  background-size:50px 50px;
+  mask-image:radial-gradient(ellipse 90% 90% at 50% 50%,black 20%,transparent);
+}
+.cw::after{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse 60% 50% at 50% 55%,rgba(255,122,0,.035) 0%,transparent 65%);
+}
+
+/* MAIN SVG WRAPPER */
+#svgWrap{position:relative;z-index:2;}
+@keyframes floatA{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}
+.float-model{animation:floatA 5s ease-in-out infinite;}
+
+/* SCAN LINE */
+#scanLine{
+  position:absolute;left:8%;right:8%;height:1.5px;
+  background:linear-gradient(90deg,transparent 0%,var(--or) 30%,rgba(255,200,100,.8) 50%,var(--or) 70%,transparent 100%);
+  display:none;top:20%;z-index:20;
+  box-shadow:0 0 12px rgba(255,122,0,.6);
+}
+#scanLine.vis{display:block;animation:scanAnim 2.2s ease-in-out infinite;}
+@keyframes scanAnim{0%{top:12%;opacity:1;}50%{opacity:.5;}100%{top:88%;opacity:1;}}
+
+/* Processing overlay */
+.proc{
+  position:absolute;inset:0;z-index:50;
+  background:rgba(7,7,10,.88);backdrop-filter:blur(6px);
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+}
+.proc.vis{display:flex;}
+.proc-lbl{font-family:var(--mono);font-size:12px;color:var(--or);letter-spacing:.1em;}
+.proc-bw{width:300px;height:3px;background:var(--s3);border-radius:2px;overflow:hidden;}
+.proc-b{height:100%;background:linear-gradient(90deg,var(--or),var(--or2));width:0%;border-radius:2px;transition:width .35s ease;}
+.proc-st{width:300px;display:flex;flex-direction:column;gap:5px;}
+.pst{font-size:9px;font-family:var(--mono);color:var(--txt3);display:flex;align-items:center;gap:7px;}
+.pst.a{color:var(--or);}.pst.d{color:var(--green);}
+.psd{width:5px;height:5px;border-radius:50%;background:var(--txt3);flex-shrink:0;}
+.pst.a .psd{background:var(--or);}.pst.d .psd{background:var(--green);}
+
+/* Result overlay */
+.ro{position:absolute;bottom:16px;left:16px;display:none;z-index:10;}
+.ro.vis{display:block;}
+.ro-c{
+  background:rgba(10,10,14,.92);border:1px solid var(--b2);border-radius:10px;
+  padding:13px 15px;min-width:190px;backdrop-filter:blur(12px);
+}
+.ro-t{font-size:8px;font-family:var(--mono);letter-spacing:.14em;color:var(--txt3);text-transform:uppercase;margin-bottom:9px;}
+.ro-r{display:flex;justify-content:space-between;gap:18px;margin-bottom:5px;font-size:10px;}
+.ro-k{color:var(--txt2);}.ro-v{font-family:var(--mono);color:var(--txt);font-weight:500;}
+
+/* Material legend */
+.ml{position:absolute;top:12px;right:12px;display:none;z-index:10;}
+.ml.vis{display:flex;flex-direction:column;gap:6px;}
+.ml-row{display:flex;align-items:center;gap:7px;font-size:9px;font-family:var(--mono);color:var(--txt2);}
+.ml-dot{width:10px;height:10px;border-radius:50%;}
+.vctl{position:absolute;top:12px;left:12px;display:none;z-index:10;flex-direction:column;gap:4px;}
+.vctl.vis{display:flex;}
+
+/* METRICS */
+.mb{height:44px;background:var(--s1);border-top:1px solid var(--b1);display:flex;align-items:center;padding:0 22px;gap:28px;flex-shrink:0;}
+.mi{display:flex;flex-direction:column;gap:1px;}
+.mv{font-size:15px;font-family:var(--mono);font-weight:700;}
+.mv.or{color:var(--or);}.mv.g{color:var(--green);}
+.ml2{font-size:7px;font-family:var(--mono);color:var(--txt3);letter-spacing:.1em;text-transform:uppercase;}
+.ms{width:1px;height:26px;background:var(--b1);}
+
+/* NOTIFY */
+.nt{
+  position:fixed;bottom:22px;right:22px;z-index:999;
+  background:var(--s2);border:1px solid var(--or-brd);border-radius:8px;
+  padding:11px 15px;font-size:11px;color:var(--txt);
+  display:flex;align-items:center;gap:9px;font-weight:500;
+  transform:translateX(130%);transition:transform .3s ease;max-width:280px;
+}
+.nt.sh{transform:translateX(0);}
+.nt.ok{border-color:rgba(45,208,122,.35);}
+.nd{width:5px;height:5px;border-radius:50%;background:var(--or);flex-shrink:0;}
+.nt.ok .nd{background:var(--green);}
+
+/* Anims */
+@keyframes fsu{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+.an{animation:fsu .35s ease forwards;opacity:0;}
+.d1{animation-delay:.05s;}.d2{animation-delay:.1s;}.d3{animation-delay:.15s;}.d4{animation-delay:.2s;}.d5{animation-delay:.25s;}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- HEADER -->
+<header>
+  <div class="logo"><span class="lo">OWN</span><span class="ll">LAB</span><span style="color:var(--txt3);margin:0 4px">/</span><span class="lp">SPLINT AI</span></div>
+  <div class="h-steps">
+    <div class="hs active" id="hs1" onclick="gS(1)"><span class="hn">1</span>ЗАГРУЗКА</div>
+    <div class="hs" id="hs2" onclick="gS(2)"><span class="hn">2</span>УСТРОЙСТВО</div>
+    <div class="hs" id="hs3" onclick="gS(3)"><span class="hn">3</span>ПАРАМЕТРЫ</div>
+    <div class="hs" id="hs4" onclick="gS(4)"><span class="hn">4</span>РЕЗУЛЬТАТ</div>
+  </div>
+  <div class="h-sep"></div>
+  <div class="h-tag">OWNLAB DIGITAL · v1.0</div>
+</header>
+
+<main>
+<!-- ═══ LEFT PANEL ═══ -->
+<div class="fp">
+
+  <!-- STEP 1 -->
+  <div class="sp on" id="s1">
+    <div class="fb an d1">
+      <div class="fb-t">Рабочая модель + Антагонист</div>
+      <div class="up2">
+        <div class="uz" id="uz-w" onclick="doUpload('w')">
+          <div class="uz-i" id="ui-w">⌀</div>
+          <div class="uz-n">Рабочая</div>
+          <div class="uz-s">Верхняя или нижняя челюсть</div>
+          <div class="uz-b" id="ub-w">.STL .PLY .OBJ</div>
+        </div>
+        <div class="uz" id="uz-a" onclick="doUpload('a')">
+          <div class="uz-i" id="ui-a">⌀</div>
+          <div class="uz-n">Антагонист</div>
+          <div class="uz-s">Противоположная дуга</div>
+          <div class="uz-b" id="ub-a">.STL .PLY .OBJ</div>
+        </div>
+      </div>
+    </div>
+    <div class="fb an d2">
+      <div class="fb-t">Прикусной регистрат (опционально)</div>
+      <div class="uz" id="uz-b" onclick="doUpload('b')" style="padding:14px;">
+        <div class="uz-i" id="ui-b" style="font-size:18px;margin-bottom:6px;">⌀</div>
+        <div class="uz-n">Прикусной регистрат</div>
+        <div class="uz-s">Для точного позиционирования по окклюзии. Scan, wax или силикон.</div>
+        <div class="uz-b" id="ub-b">OPTIONAL · .STL</div>
+      </div>
+    </div>
+    <div class="fb an d3">
+      <div class="fb-t">Рабочая челюсть</div>
+      <div class="rg">
+        <div class="rb s" onclick="selR(this,'jaw')">Верхняя (д/э) ▲</div>
+        <div class="rb" onclick="selR(this,'jaw')">Нижняя (н/э) ▼</div>
+      </div>
+    </div>
+    <div class="fb an d4">
+      <div class="ib"><span class="ib-i">ℹ</span>
+        <div class="ib-t">AI автоматически определит <strong>границу зубного ряда</strong>, линию десны и окклюзионные контакты с антагонистом — без ручной разметки.</div>
+      </div>
+    </div>
+    <div class="ff"><button class="bp" onclick="nS(2)">ДАЛЕЕ →</button></div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="sp" id="s2">
+    <div class="fb an d1">
+      <div class="fb-t">Тип окклюзионного устройства</div>
+      <div class="dg">
+        <div class="dc sel" onclick="selDev(this,'michigan')" id="dc-michigan">
+          <div class="dc-n">Мичиган</div>
+          <div class="dc-s">Полное перекрытие. Стабилизирующая шина ВНЧС + бруксизм</div>
+          <div class="dc-t">⬡ FULL · HARD ACRYLIC</div>
+        </div>
+        <div class="dc" onclick="selDev(this,'kois')" id="dc-kois">
+          <div class="dc-n">Депрограмматор Койса</div>
+          <div class="dc-s">Передняя платформа. Нейромышечная репозиция мыщелка</div>
+          <div class="dc-t">⬡ ANTERIOR · DIAGNOSTIC</div>
+        </div>
+        <div class="dc" onclick="selDev(this,'nti')" id="dc-nti">
+          <div class="dc-n">NTI-TSS</div>
+          <div class="dc-s">Минимальная конструкция. 2 передних зуба. Мигрень, тризм</div>
+          <div class="dc-t">⬡ MINIMAL · 2 TEETH</div>
+        </div>
+        <div class="dc" onclick="selDev(this,'gelb')" id="dc-gelb">
+          <div class="dc-n">Шина Гельба</div>
+          <div class="dc-s">Репозиционирование нижней челюсти. Протрузия мыщелка</div>
+          <div class="dc-t">⬡ REPOSITIONING · FULL</div>
+        </div>
+      </div>
+    </div>
+    <div class="fb an d2">
+      <div class="fb-t">Материал</div>
+      <div class="rg" id="matGroup">
+        <div class="rb s" onclick="selR(this,'mat');selMat(this)">Жёсткий акрил</div>
+        <div class="rb" onclick="selR(this,'mat');selMat(this)">Soft-Hard</div>
+        <div class="rb" onclick="selR(this,'mat');selMat(this)">Термоформ</div>
+        <div class="rb" onclick="selR(this,'mat');selMat(this)">PMMA фрезер.</div>
+      </div>
+    </div>
+    <div class="fb an d3">
+      <div class="fb-t">Метод изготовления</div>
+      <div class="rg">
+        <div class="rb s" onclick="selR(this,'mfg')">DLP/LCD печать</div>
+        <div class="rb" onclick="selR(this,'mfg')">FDM печать</div>
+        <div class="rb" onclick="selR(this,'mfg')">CAD/CAM фрезер.</div>
+        <div class="rb" onclick="selR(this,'mfg')">Термоформ.</div>
+      </div>
+    </div>
+    <div class="fb an d4">
+      <div class="ib" id="devInfoBox"><span class="ib-i">⬡</span>
+        <div class="ib-t" id="devInfoTxt"><strong>Мичиганская шина</strong> — золотой стандарт гнатологии. Полное перекрытие, плоская окклюзионная плоскость, клыковые направляющие. Жёсткий акрил обеспечивает стабильный окклюзионный контакт.</div>
+      </div>
+    </div>
+    <div class="ff">
+      <button class="bs" onclick="nS(1)">← НАЗАД</button>
+      <button class="bp" onclick="nS(3)">ДАЛЕЕ →</button>
+    </div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="sp" id="s3">
+    <div class="fb an d1">
+      <div class="fb-t">Вертикальное раскрытие</div>
+      <div class="sw">
+        <div class="sw-h"><span class="sw-l">Разобщение в области моляров</span><span class="sw-v" id="sv1">2.0 мм</span></div>
+        <input type="range" min="10" max="50" value="20" oninput="document.getElementById('sv1').textContent=(this.value/10).toFixed(1)+' мм'">
+      </div>
+      <div class="sw">
+        <div class="sw-h"><span class="sw-l">Разобщение в области резцов</span><span class="sw-v" id="sv2">1.5 мм</span></div>
+        <input type="range" min="5" max="40" value="15" oninput="document.getElementById('sv2').textContent=(this.value/10).toFixed(1)+' мм'">
+      </div>
+    </div>
+    <div class="fb an d2">
+      <div class="fb-t">Геометрия тела шины</div>
+      <div class="nr">
+        <div class="nr-l">Минимальная толщина тела</div>
+        <div class="ni"><button class="nb" onclick="cn('nv1',-1)">−</button><input class="nv" id="nv1" value="1.5" readonly><button class="nb" onclick="cn('nv1',1)">+</button></div>
+      </div>
+      <div class="nr">
+        <div class="nr-l">Цементная щель / прилегание</div>
+        <div class="ni"><button class="nb" onclick="cn('nv2',-1)">−</button><input class="nv" id="nv2" value="0.5" readonly><button class="nb" onclick="cn('nv2',1)">+</button></div>
+      </div>
+      <div class="nr" style="margin-bottom:0">
+        <div class="nr-l">Поддесневое погружение</div>
+        <div class="ni"><button class="nb" onclick="cn('nv3',-0.5)">−</button><input class="nv" id="nv3" value="0.5" readonly><button class="nb" onclick="cn('nv3',0.5)">+</button></div>
+      </div>
+    </div>
+    <div class="fb an d3">
+      <div class="fb-t">Окклюзионная схема</div>
+      <div class="tf"><span class="tf-l">Плоская окклюзионная плоскость</span><div class="tg on" onclick="tgl(this)"><div class="tg-t"></div></div></div>
+      <div class="tf"><span class="tf-l">Клыковые направляющие</span><div class="tg on" onclick="tgl(this)"><div class="tg-t"></div></div></div>
+      <div class="tf"><span class="tf-l">Дезокклюзия жевательных при экскурсии</span><div class="tg" onclick="tgl(this)"><div class="tg-t"></div></div></div>
+      <div class="tf" style="margin-bottom:0"><span class="tf-l">Граница по экватору зуба</span><div class="tg on" onclick="tgl(this)"><div class="tg-t"></div></div></div>
+    </div>
+    <div class="fb an d4">
+      <div class="ib"><span class="ib-i">⬡</span>
+        <div class="ib-t">AI построит <strong>плоскость Шпее и Вильсона</strong> автоматически по загруженным моделям. Параметры — тонкая настройка.</div>
+      </div>
+    </div>
+    <div class="ff">
+      <button class="bs" onclick="nS(2)">← НАЗАД</button>
+      <button class="bp" onclick="startGen()">⬡ СГЕНЕРИРОВАТЬ</button>
+    </div>
+  </div>
+
+  <!-- STEP 4 -->
+  <div class="sp" id="s4">
+    <div class="fb an d1">
+      <div class="fb-t">Результат AI</div>
+      <div class="rc crit"><span style="color:var(--green);font-size:13px;">✓</span><div><div class="rc-n">Граница построена</div><div class="rc-s">14 зубов, точность линии десны 97%</div></div></div>
+      <div class="rc crit"><span style="color:var(--green);font-size:13px;">✓</span><div><div class="rc-n">Окклюзионные контакты</div><div class="rc-s">24 точки контакта с антагонистом</div></div></div>
+      <div class="rc warn"><span style="color:var(--or);font-size:13px;">⚠</span><div><div class="rc-n">Зуб 36: мин. толщина 1.3 мм</div><div class="rc-s">Рекомендуется контроль при полировке</div></div></div>
+    </div>
+    <div class="fb an d2">
+      <div class="fb-t">Параметры файла</div>
+      <div class="rstat">
+        <div class="rs"><div class="rs-v or">247K</div><div class="rs-l">Полигонов</div></div>
+        <div class="rs"><div class="rs-v g">OK</div><div class="rs-l">Waterproof</div></div>
+        <div class="rs"><div class="rs-v">1.3мм</div><div class="rs-l">Мин. толщина</div></div>
+        <div class="rs"><div class="rs-v or">97%</div><div class="rs-l">AI Confidence</div></div>
+      </div>
+    </div>
+    <div class="fb an d3">
+      <div class="fb-t">Экспорт</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button onclick="nt('STL для 3D печати скачан','ok')" style="width:100%;padding:11px;background:var(--or);color:#000;border:none;border-radius:7px;font-family:var(--mono);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.06em;">⬡ DOWNLOAD STL (PRINT)</button>
+        <div style="display:flex;gap:7px;">
+          <button onclick="nt('3MF экспортирован','ok')" style="flex:1;padding:8px;background:var(--s2);color:var(--txt);border:1px solid var(--b2);border-radius:6px;font-family:var(--mono);font-size:10px;cursor:pointer;">3MF</button>
+          <button onclick="nt('PDF отчёт готов','ok')" style="flex:1;padding:8px;background:var(--s2);color:var(--txt);border:1px solid var(--b2);border-radius:6px;font-family:var(--mono);font-size:10px;cursor:pointer;">PDF</button>
+          <button onclick="nt('Отправлено в лаборатории','ok')" style="flex:1;padding:8px;background:var(--s2);color:var(--txt);border:1px solid var(--b2);border-radius:6px;font-family:var(--mono);font-size:10px;cursor:pointer;">→ LAB</button>
+        </div>
+      </div>
+    </div>
+    <div class="ff">
+      <button class="bs" onclick="nS(3)">← ИЗМЕНИТЬ</button>
+      <button class="bp" onclick="nS(1);resetAll()">НОВЫЙ ЗАКАЗ</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ RIGHT VIEWPORT ═══ -->
+<div class="vp">
+  <div class="vt">
+    <span class="vt-t">3D VIEWPORT</span>
+    <div class="pill pill-w" id="vpill">ОЖИДАНИЕ ЗАГРУЗКИ</div>
+    <div class="vb-grp" id="vbGrp" style="display:none">
+      <button class="vb a" onclick="setView('occ')">OCC</button>
+      <button class="vb" onclick="setView('buc')">BUC</button>
+      <button class="vb" onclick="setView('3d')">3D</button>
+      <button class="vb" onclick="toggleSplint()">⬡ ШИНА</button>
+      <button class="vb" onclick="toggleWire()">WIRE</button>
+    </div>
+    <div class="vt-f" id="vtFile">— нет файла —</div>
+  </div>
+
+  <!-- CANVAS -->
+  <div class="cw">
+    <div id="svgWrap">
+      <!-- SVG rendered by JS -->
+    </div>
+
+    <!-- Scan line -->
+    <div id="scanLine"></div>
+
+    <!-- Processing overlay -->
+    <div class="proc" id="procOvl">
+      <div class="proc-lbl" id="procLbl">⬡ AI PROCESSING</div>
+      <div class="proc-bw"><div class="proc-b" id="procB"></div></div>
+      <div class="proc-st" id="procSt">
+        <div class="pst" id="pst1"><span class="psd"></span>Загрузка и валидация STL</div>
+        <div class="pst" id="pst2"><span class="psd"></span>Сегментация зубного ряда</div>
+        <div class="pst" id="pst3"><span class="psd"></span>Определение линии десны</div>
+        <div class="pst" id="pst4"><span class="psd"></span>Построение границы реставрации</div>
+        <div class="pst" id="pst5"><span class="psd"></span>Анализ окклюзионных контактов</div>
+        <div class="pst" id="pst6"><span class="psd"></span>Генерация формы шины</div>
+        <div class="pst" id="pst7"><span class="psd"></span>Оптимизация толщины стенок</div>
+        <div class="pst" id="pst8"><span class="psd"></span>Финализация и проверка</div>
+      </div>
+    </div>
+
+    <!-- Result info card -->
+    <div class="ro" id="resOvl">
+      <div class="ro-c">
+        <div class="ro-t">Сгенерировано</div>
+        <div class="ro-r"><span class="ro-k">Тип</span><span class="ro-v" id="ro-type" style="color:var(--or)">Мичиган</span></div>
+        <div class="ro-r"><span class="ro-k">Зубов покрыто</span><span class="ro-v" id="ro-teeth">14</span></div>
+        <div class="ro-r"><span class="ro-k">Мин. толщина</span><span class="ro-v">1.3 мм</span></div>
+        <div class="ro-r"><span class="ro-k">Раскрытие</span><span class="ro-v">2.0 мм</span></div>
+        <div class="ro-r"><span class="ro-k">Материал</span><span class="ro-v" id="ro-mat">Жёсткий акрил</span></div>
+        <div class="ro-r"><span class="ro-k">Waterproof</span><span class="ro-v" style="color:var(--green)">✓ OK</span></div>
+      </div>
+    </div>
+
+    <!-- Material legend -->
+    <div class="ml" id="matLeg">
+      <div class="ml-row"><div class="ml-dot" id="ml-dot" style="background:rgba(96,170,255,.6)"></div><span id="ml-label">Жёсткий акрил · Michigan</span></div>
+      <div class="ml-row"><div class="ml-dot" style="background:rgba(200,200,220,.25);border:1px solid rgba(255,255,255,.2)"></div><span>Зубная ткань</span></div>
+    </div>
+
+    <!-- View controls -->
+    <div class="vctl" id="vctl">
+      <button class="vb" onclick="nt('Граница пересчитана','ok')">↺ RE-SCAN</button>
+      <button class="vb" onclick="nt('Толщина обновлена','ok')">⊕ THICKNESS</button>
+    </div>
+
+  </div>
+
+  <!-- METRICS BAR -->
+  <div class="mb">
+    <div class="mi"><div class="mv or" id="mb-p">—</div><div class="ml2">Полигонов</div></div>
+    <div class="ms"></div>
+    <div class="mi"><div class="mv" id="mb-t">—</div><div class="ml2">Зубов</div></div>
+    <div class="ms"></div>
+    <div class="mi"><div class="mv" id="mb-c">—</div><div class="ml2">Confidence</div></div>
+    <div class="ms"></div>
+    <div class="mi"><div class="mv" id="mb-s" style="">ОЖИДАНИЕ</div><div class="ml2">Статус</div></div>
+    <div class="ms"></div>
+    <div class="mi"><div class="mv" id="mb-tm">—</div><div class="ml2">Обработка</div></div>
+  </div>
+</div>
+
+</main>
+</div>
+<div class="nt" id="ntEl"><div class="nd"></div><span id="ntTxt">OK</span></div>
+
+<script>
+// ─── STATE ───
+let curStep = 1;
+let uploads = {w:false, a:false, b:false};
+let curDev = 'michigan';
+let curMat = 'hard';
+let showSplint = true;
+let genDone = false;
+let ntTimer;
+
+// Material → visual properties
+const matProps = {
+  'hard':    { color:'rgba(80,160,255,0.32)',  stroke:'rgba(100,180,255,0.7)',  label:'Жёсткий акрил',  glow:'rgba(80,160,255,0.15)' },
+  'soft':    { color:'rgba(120,200,255,0.18)', stroke:'rgba(150,210,255,0.4)', label:'Soft-Hard',       glow:'rgba(100,180,255,0.08)' },
+  'thermo':  { color:'rgba(180,220,255,0.12)', stroke:'rgba(200,230,255,0.3)', label:'Термоформ',       glow:'rgba(150,200,255,0.05)' },
+  'pmma':    { color:'rgba(60,140,255,0.28)',  stroke:'rgba(90,160,255,0.6)',  label:'PMMA фрезеровка', glow:'rgba(60,140,255,0.12)' }
+};
+
+// Device → teeth coverage info
+const devProps = {
+  michigan: { label:'Michigan', teeth:'14', coverage:'full',     anterior:false, color:'rgba(80,160,255,0.32)' },
+  kois:     { label:'Кois Dep.', teeth:'6',  coverage:'anterior', anterior:true,  color:'rgba(255,180,80,0.30)'  },
+  nti:      { label:'NTI-TSS',  teeth:'2',  coverage:'min',      anterior:true,  color:'rgba(80,200,255,0.40)'  },
+  gelb:     { label:'Gelb',     teeth:'14', coverage:'full',     anterior:false, color:'rgba(80,255,180,0.25)'  }
+};
+
+const devInfo = {
+  michigan: '<strong>Мичиганская шина</strong> — полное перекрытие, плоская плоскость, клыковые направляющие. Стабилизация при бруксизме и ВНЧС. Жёсткий акрил.',
+  kois:     '<strong>Депрограмматор Койса</strong> — передняя акриловая платформа. Быстрая депрограммация жевательных мышц. Диагностический инструмент перед постоянным лечением.',
+  nti:      '<strong>NTI-TSS</strong> — только 2 передних зуба. Снижение активности жевательных мышц на 70%. Мигрень, тризм, парафункция.',
+  gelb:     '<strong>Шина Гельба</strong> — протрузионное репозиционирование мыщелка. ВНЧС синдром с дискальным смещением.'
+};
+
+// ─── STEP NAVIGATION ───
+function gS(n) { if(n <= curStep + 1) { curStep = n; updSteps(); } }
+function nS(n) { curStep = n; updSteps(); }
+function updSteps() {
+  document.querySelectorAll('.sp').forEach((p,i) => p.classList.toggle('on', i+1===curStep));
+  document.querySelectorAll('.hs').forEach((s,i) => {
+    s.className = 'hs' + (i+1===curStep?' active':i+1<curStep?' done':'');
+    s.querySelector('.hn').textContent = i+1 < curStep ? '✓' : i+1;
+  });
+}
+
+// ─── UPLOADS ───
+function doUpload(t) {
+  uploads[t] = true;
+  const zone = document.getElementById('uz-'+t);
+  const icon = document.getElementById('ui-'+t);
+  const badge = document.getElementById('ub-'+t);
+  zone.classList.add('ok');
+  icon.textContent = '✓';
+  badge.textContent = 'ЗАГРУЖЕНО'; badge.className = 'uz-b ok';
+  const names = {w:'upper_arch.stl', a:'lower_antagonist.stl', b:'bite_reg.stl'};
+  nt('Загружен: ' + names[t], 'ok');
+  if(uploads.w && uploads.a) { setTimeout(activateViewport, 500); }
+}
+
+function activateViewport() {
+  drawScene('ghost');
+  document.getElementById('vpill').textContent = 'СКАНИРОВАНИЕ...';
+  document.getElementById('vpill').className = 'pill pill-p';
+  document.getElementById('vtFile').textContent = 'upper_arch.stl + antagonist.stl';
+  document.getElementById('vbGrp').style.display = 'flex';
+  document.getElementById('vctl').classList.add('vis');
+  document.getElementById('mb-s').textContent = 'СКАН';
+  document.getElementById('mb-s').style.color = 'var(--or)';
+  document.getElementById('scanLine').classList.add('vis');
+  setTimeout(() => {
+    document.getElementById('scanLine').classList.remove('vis');
+    drawScene('loaded');
+    document.getElementById('mb-p').textContent = '247K';
+    document.getElementById('mb-t').textContent = '14';
+    document.getElementById('mb-c').textContent = '98%';
+    document.getElementById('mb-s').textContent = 'ГОТОВО';
+    document.getElementById('mb-s').style.color = 'var(--green)';
+    document.getElementById('vpill').textContent = 'МОДЕЛИ ЗАГРУЖЕНЫ';
+    document.getElementById('vpill').className = 'pill pill-d';
+    nt('✓ AI построил зубной ряд, 14 зубов', 'ok');
+    setTimeout(pulseMargin, 600);
+  }, 2800);
+}
+
+function pulseMargin() {
+  drawScene('margin');
+  nt('⬡ Пульсирует граница реставрации');
+  setTimeout(() => drawScene('loaded'), 3000);
+}
+
+// ─── DEV & MAT ───
+function selDev(el, dev) {
+  document.querySelectorAll('.dc').forEach(c => c.classList.remove('sel'));
+  el.classList.add('sel');
+  curDev = dev;
+  document.getElementById('devInfoTxt').innerHTML = devInfo[dev];
+  document.getElementById('ro-type').textContent = devProps[dev].label;
+  document.getElementById('ro-teeth').textContent = devProps[dev].teeth;
+  if(genDone) drawScene('result');
+}
+function selMat(el) {
+  const txt = el.textContent;
+  if(txt.includes('акрил')) curMat = 'hard';
+  else if(txt.includes('Soft')) curMat = 'soft';
+  else if(txt.includes('Термо')) curMat = 'thermo';
+  else curMat = 'pmma';
+  document.getElementById('ml-dot').style.background = matProps[curMat].color;
+  document.getElementById('ml-label').textContent = matProps[curMat].label + ' · ' + devProps[curDev].label;
+  document.getElementById('ro-mat').textContent = matProps[curMat].label;
+  if(genDone) drawScene('result');
+}
+function selR(el, grp) {
+  el.closest('.rg').querySelectorAll('.rb').forEach(b=>b.classList.remove('s'));
+  el.classList.add('s');
+}
+function tgl(el) { el.classList.toggle('on'); }
+function cn(id, d) {
+  const el = document.getElementById(id);
+  let v = parseFloat(el.value) + d;
+  v = Math.max(0.1, Math.min(5.0, v));
+  el.value = v.toFixed(1);
+}
+function setView(v) {
+  document.querySelectorAll('.vb').forEach(b=>b.classList.remove('a'));
+  event.currentTarget.classList.add('a');
+}
+function toggleSplint() { showSplint=!showSplint; if(genDone) drawScene('result'); }
+function toggleWire() { nt('Wireframe переключён'); }
+
+// ─── GENERATION ───
+function startGen() {
+  nS(4);
+  document.getElementById('procOvl').classList.add('vis');
+  document.getElementById('mb-s').textContent = 'ГЕНЕРАЦИЯ';
+  document.getElementById('mb-s').style.color = 'var(--or)';
+  document.getElementById('vpill').textContent = 'AI ГЕНЕРАЦИЯ';
+  document.getElementById('vpill').className = 'pill pill-p';
+  const steps = ['pst1','pst2','pst3','pst4','pst5','pst6','pst7','pst8'];
+  const pcts  = [5,14,26,40,56,72,86,100];
+  let idx = 0;
+  const timer = setInterval(() => {
+    if(idx > 0) { const p = document.getElementById(steps[idx-1]); p.className='pst d'; p.querySelector('.psd').style.background='var(--green)'; }
+    if(idx < steps.length) {
+      const p = document.getElementById(steps[idx]); p.className='pst a';
+      document.getElementById('procB').style.width = pcts[idx]+'%';
+      document.getElementById('procLbl').textContent = '⬡ ' + p.textContent.trim().toUpperCase();
+      idx++;
+    } else { clearInterval(timer); setTimeout(finishGen, 500); }
+  }, 420);
+}
+
+function finishGen() {
+  genDone = true;
+  document.getElementById('procOvl').classList.remove('vis');
+  drawScene('result');
+  document.getElementById('resOvl').classList.add('vis');
+  document.getElementById('matLeg').classList.add('vis');
+  document.getElementById('vpill').textContent = 'ШИНА ГОТОВА';
+  document.getElementById('vpill').className = 'pill pill-d';
+  document.getElementById('mb-s').textContent = 'ГОТОВО';
+  document.getElementById('mb-s').style.color = 'var(--green)';
+  document.getElementById('mb-tm').textContent = '3.2 сек';
+  nt('✓ Шина смоделирована · STL готов к экспорту', 'ok');
+}
+
+function resetAll() {
+  uploads={w:false,a:false,b:false}; genDone=false; curDev='michigan'; curMat='hard';
+  ['w','a','b'].forEach(t=>{
+    const z=document.getElementById('uz-'+t); if(z) z.classList.remove('ok');
+    const i=document.getElementById('ui-'+t); if(i) i.textContent='⌀';
+    const b=document.getElementById('ub-'+t); if(b){b.className='uz-b';b.textContent=t==='b'?'OPTIONAL · .STL':'.STL .PLY .OBJ';}
+  });
+  document.getElementById('vpill').textContent='ОЖИДАНИЕ ЗАГРУЗКИ';
+  document.getElementById('vpill').className='pill pill-w';
+  document.getElementById('vtFile').textContent='— нет файла —';
+  document.getElementById('vbGrp').style.display='none';
+  document.getElementById('vctl').classList.remove('vis');
+  document.getElementById('resOvl').classList.remove('vis');
+  document.getElementById('matLeg').classList.remove('vis');
+  ['mb-p','mb-t','mb-c','mb-tm'].forEach(id=>document.getElementById(id).textContent='—');
+  document.getElementById('mb-s').textContent='ОЖИДАНИЕ'; document.getElementById('mb-s').style.color='';
+  ['pst1','pst2','pst3','pst4','pst5','pst6','pst7','pst8'].forEach(id=>{
+    const p=document.getElementById(id); p.className='pst'; p.querySelector('.psd').style.background='';
+  });
+  document.getElementById('procB').style.width='0%';
+  document.getElementById('procLbl').textContent='⬡ AI PROCESSING';
+  drawScene('empty');
+}
+
+// ─── NOTIFY ───
+function nt(msg, type='') {
+  const el = document.getElementById('ntEl');
+  document.getElementById('ntTxt').textContent = msg;
+  el.className = 'nt sh' + (type==='ok'?' ok':'');
+  clearTimeout(ntTimer);
+  ntTimer = setTimeout(()=>el.classList.remove('sh'), 3200);
+}
+
+// ──────────────────────────────────────────────
+// ─── DRAW SCENE (the visual engine) ───────────
+// ──────────────────────────────────────────────
+function drawScene(mode) {
+  const wrap = document.getElementById('svgWrap');
+  const W = 620, H = 440;
+
+  // SVG namespace helper
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS,'svg');
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  // ── DEFS ──
+  const defs = document.createElementNS(NS,'defs');
+  defs.innerHTML = `
+    <!-- TOOTH GRADIENTS -->
+    <radialGradient id="tg1" cx="38%" cy="30%" r="68%">
+      <stop offset="0%" stop-color="#5a5a68"/>
+      <stop offset="45%" stop-color="#2c2c38"/>
+      <stop offset="100%" stop-color="#14141c"/>
+    </radialGradient>
+    <radialGradient id="tg2" cx="40%" cy="32%" r="62%">
+      <stop offset="0%" stop-color="#4e4e5e"/>
+      <stop offset="50%" stop-color="#252530"/>
+      <stop offset="100%" stop-color="#111118"/>
+    </radialGradient>
+    <radialGradient id="tg3" cx="42%" cy="35%" r="58%">
+      <stop offset="0%" stop-color="#404050"/>
+      <stop offset="100%" stop-color="#0e0e16"/>
+    </radialGradient>
+    <!-- GINGIVA GRADIENT -->
+    <linearGradient id="gg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2a1a20"/>
+      <stop offset="100%" stop-color="#1a1018"/>
+    </linearGradient>
+    <!-- SPLINT GRAD -->
+    <radialGradient id="sg" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="${matProps[curMat].color.replace('0.32','0.5').replace('0.28','0.45').replace('0.30','0.48').replace('0.18','0.3').replace('0.12','0.22').replace('0.25','0.4').replace('0.40','0.6')}"/>
+      <stop offset="100%" stop-color="${matProps[curMat].color.replace('0.32','0.05').replace('0.28','0.05').replace('0.30','0.05').replace('0.18','0.05').replace('0.12','0.03').replace('0.25','0.04').replace('0.40','0.08')}"/>
+    </radialGradient>
+    <linearGradient id="se" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="${matProps[curMat].stroke}"/>
+      <stop offset="100%" stop-color="${matProps[curMat].stroke.replace('0.7','0.15').replace('0.6','0.1').replace('0.4','0.08').replace('0.3','0.06')}"/>
+    </linearGradient>
+    <!-- MARGIN GRADIENT -->
+    <radialGradient id="mg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="rgba(255,122,0,0)"/>
+      <stop offset="70%" stop-color="rgba(255,122,0,0.15)"/>
+      <stop offset="100%" stop-color="rgba(255,122,0,0.6)"/>
+    </radialGradient>
+    <!-- SHADOW -->
+    <filter id="dropshadow"><feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="rgba(0,0,0,0.85)"/></filter>
+    <filter id="glow1"><feGaussianBlur stdDeviation="3" result="b"/><feComposite in="SourceGraphic" in2="b" operator="over"/></filter>
+    <filter id="glow2"><feGaussianBlur stdDeviation="6" result="b"/><feComposite in="SourceGraphic" in2="b" operator="over"/></filter>
+    <!-- PULSE ANIM -->
+    <style>
+      @keyframes mpulse { 0%,100%{opacity:1;stroke-width:2;} 50%{opacity:0.35;stroke-width:4;} }
+      @keyframes mglow  { 0%,100%{opacity:0.8;} 50%{opacity:0.2;} }
+      @keyframes cpts   { 0%,100%{r:3;opacity:.8;} 50%{r:5;opacity:.3;} }
+      .margin-path { animation: mpulse 1.4s ease-in-out infinite; }
+      .margin-glow { animation: mglow 1.4s ease-in-out infinite; }
+      .cpt { animation: cpts 2s ease-in-out infinite; }
+    </style>
+  `;
+  svg.appendChild(defs);
+
+  const g = (alpha) => mode==='ghost' ? alpha*0.18 : alpha;
+
+  // ── UPPER JAW (working model) ──
+  // This is a top-view representation with slight perspective
+  // We'll draw as a side+front view showing both upper and lower
+  // Upper jaw = main model (top, darker)
+  // Lower jaw = antagonist (bottom, lighter, rotated 180°)
+
+  // ─ LOWER ANTAGONIST (smaller, positioned below) ─
+  const lower = document.createElementNS(NS,'g');
+  lower.setAttribute('filter','url(#dropshadow)');
+  lower.setAttribute('opacity', mode==='empty' ? '0.08' : mode==='ghost' ? '0.18' : '0.35');
+  lower.setAttribute('transform','translate(0,28)');
+  lower.innerHTML = buildLowerArch(W, H);
+  svg.appendChild(lower);
+
+  // ─ UPPER JAW ─
+  const upper = document.createElementNS(NS,'g');
+  upper.setAttribute('filter','url(#dropshadow)');
+  upper.setAttribute('opacity', mode==='empty' ? '0' : mode==='ghost' ? '0.22' : '1');
+  upper.innerHTML = buildUpperArch(W, H);
+  svg.appendChild(upper);
+
+  // ─ MARGIN LINE (pulsing, only in 'margin' mode) ─
+  if(mode === 'margin') {
+    const mg = document.createElementNS(NS,'g');
+    mg.innerHTML = buildMarginLine(W, H, curDev);
+    svg.appendChild(mg);
+  }
+
+  // ─ SPLINT OVERLAY ─
+  if((mode==='result') && showSplint) {
+    const sp = document.createElementNS(NS,'g');
+    sp.innerHTML = buildSplintOverlay(W, H, curDev, curMat);
+    svg.appendChild(sp);
+  }
+
+  // ─ AXIS GIZMO ─
+  const ax = document.createElementNS(NS,'g');
+  ax.setAttribute('transform',`translate(${W-48},${H-40})`);
+  ax.setAttribute('opacity','0.5');
+  ax.innerHTML = `
+    <line x1="0" y1="0" x2="22" y2="0" stroke="rgba(240,80,80,.8)" stroke-width="1.5"/>
+    <text x="25" y="4" fill="rgba(240,80,80,.7)" font-size="8" font-family="monospace">X</text>
+    <line x1="0" y1="0" x2="0" y2="-22" stroke="rgba(45,208,122,.8)" stroke-width="1.5"/>
+    <text x="3" y="-24" fill="rgba(45,208,122,.7)" font-size="8" font-family="monospace">Y</text>
+    <line x1="0" y1="0" x2="-16" y2="10" stroke="rgba(96,170,255,.8)" stroke-width="1.5"/>
+    <text x="-26" y="14" fill="rgba(96,170,255,.7)" font-size="8" font-family="monospace">Z</text>
+  `;
+  svg.appendChild(ax);
+
+  // Ghost hint text
+  if(mode==='empty' || mode==='ghost') {
+    const hint = document.createElementNS(NS,'g');
+    hint.innerHTML = `
+      <text x="${W/2}" y="${H/2-10}" fill="rgba(255,255,255,0.15)" font-size="13" font-family="IBM Plex Mono,monospace" text-anchor="middle" letter-spacing="4">ЗАГРУЗИТЕ STL МОДЕЛИ</text>
+      <text x="${W/2}" y="${H/2+12}" fill="rgba(255,255,255,0.07)" font-size="10" font-family="IBM Plex Mono,monospace" text-anchor="middle" letter-spacing="2">Рабочая модель + Антагонист</text>
+    `;
+    svg.appendChild(hint);
+  }
+
+  wrap.innerHTML = '';
+  if(mode !== 'empty') wrap.classList.add('float-model');
+  else wrap.classList.remove('float-model');
+  wrap.appendChild(svg);
+}
+
+// ─── UPPER ARCH BUILDER ───
+function buildUpperArch(W,H) {
+  const cx = W/2, cy = H/2 - 10;
+  // Teeth definitions: [angle from center in degrees, size scale, type]
+  // Upper arch, horseshoe shape, buccal view perspective
+  // We'll draw as a 3D-perspective front-angle view
+
+  return `
+  <!-- GINGIVA UPPER -->
+  <path d="M ${cx-210} ${cy+60}
+    Q ${cx-180} ${cy+55} ${cx-140} ${cy+52}
+    Q ${cx-80}  ${cy+46} ${cx}      ${cy+44}
+    Q ${cx+80}  ${cy+46} ${cx+140} ${cy+52}
+    Q ${cx+180} ${cy+55} ${cx+210} ${cy+60}
+    Q ${cx+220} ${cy+82} ${cx+210} ${cy+105}
+    Q ${cx+180} ${cy+115} ${cx+140} ${cy+118}
+    Q ${cx+80}  ${cy+122} ${cx}     ${cy+124}
+    Q ${cx-80}  ${cy+122} ${cx-140} ${cy+118}
+    Q ${cx-180} ${cy+115} ${cx-210} ${cy+105}
+    Q ${cx-220} ${cy+82} ${cx-210} ${cy+60} Z"
+    fill="url(#gg)" opacity="0.7"/>
+
+  <!-- ── UPPER TEETH (14 total, horseshoe) ── -->
+  ${buildToothAt(cx-195, cy+40, 38, 52, 0.7, 'molar',   'tg3')}
+  ${buildToothAt(cx-148, cy+34, 36, 50, 0.82,'molar',   'tg3')}
+  ${buildToothAt(cx-102, cy+25, 32, 48, 0.9, 'premolar','tg2')}
+  ${buildToothAt(cx-66,  cy+16, 28, 46, 0.96,'premolar','tg2')}
+  ${buildToothAt(cx-36,  cy+8,  26, 44, 1.0, 'canine',  'tg1')}
+  ${buildToothAt(cx-10,  cy+3,  22, 42, 1.0, 'incisor', 'tg1')}
+  ${buildToothAt(cx+12,  cy+3,  22, 42, 1.0, 'incisor', 'tg1')}
+  ${buildToothAt(cx+36,  cy+8,  26, 44, 1.0, 'canine',  'tg1')}
+  ${buildToothAt(cx+64,  cy+16, 28, 46, 0.96,'premolar','tg2')}
+  ${buildToothAt(cx+100, cy+25, 32, 48, 0.9, 'premolar','tg2')}
+  ${buildToothAt(cx+146, cy+34, 36, 50, 0.82,'molar',   'tg3')}
+  ${buildToothAt(cx+192, cy+40, 38, 52, 0.7, 'molar',   'tg3')}
+
+  <!-- GINGIVAL HIGHLIGHT LINE -->
+  <path d="M ${cx-200} ${cy+58} Q ${cx} ${cy+44} ${cx+200} ${cy+58}"
+    fill="none" stroke="rgba(180,80,100,0.2)" stroke-width="1.5"/>
+  `;
+}
+
+function buildToothAt(tx, ty, tw, th, sc, type, grad) {
+  const hw = tw*sc/2, ht = th*sc;
+  // Different cusp shapes per tooth type
+  if(type==='molar') {
+    return `<g>
+      <rect x="${tx-hw}" y="${ty-ht}" width="${hw*2}" height="${ht}" rx="4" fill="url(#${grad})" stroke="rgba(255,255,255,0.055)" stroke-width="0.6"/>
+      <!-- mesial cusp --><ellipse cx="${tx-hw*0.35}" cy="${ty-ht}" rx="${hw*0.38}" ry="${ht*0.12}" fill="url(#${grad})" stroke="rgba(255,255,255,0.04)" stroke-width="0.5"/>
+      <!-- distal cusp --><ellipse cx="${tx+hw*0.35}" cy="${ty-ht}" rx="${hw*0.38}" ry="${ht*0.12}" fill="url(#${grad})" stroke="rgba(255,255,255,0.04)" stroke-width="0.5"/>
+      <!-- highlight --><ellipse cx="${tx-hw*0.15}" cy="${ty-ht*0.55}" rx="${hw*0.45}" ry="${ht*0.2}" fill="rgba(255,255,255,0.04)"/>
+    </g>`;
+  } else if(type==='premolar') {
+    return `<g>
+      <rect x="${tx-hw}" y="${ty-ht}" width="${hw*2}" height="${ht}" rx="3.5" fill="url(#${grad})" stroke="rgba(255,255,255,0.06)" stroke-width="0.6"/>
+      <!-- buccal cusp --><ellipse cx="${tx}" cy="${ty-ht}" rx="${hw*0.5}" ry="${ht*0.1}" fill="url(#${grad})" stroke="rgba(255,255,255,0.04)" stroke-width="0.5"/>
+      <ellipse cx="${tx}" cy="${ty-ht*0.55}" rx="${hw*0.5}" ry="${ht*0.18}" fill="rgba(255,255,255,0.035)"/>
+    </g>`;
+  } else if(type==='canine') {
+    return `<g>
+      <path d="M ${tx-hw} ${ty} Q ${tx-hw} ${ty-ht*0.6} ${tx} ${ty-ht} Q ${tx+hw} ${ty-ht*0.6} ${tx+hw} ${ty} Z"
+        fill="url(#${grad})" stroke="rgba(255,255,255,0.07)" stroke-width="0.6"/>
+      <ellipse cx="${tx}" cy="${ty-ht*0.55}" rx="${hw*0.45}" ry="${ht*0.18}" fill="rgba(255,255,255,0.04)"/>
+    </g>`;
+  } else { // incisor
+    return `<g>
+      <path d="M ${tx-hw} ${ty} L ${tx-hw} ${ty-ht*0.7} Q ${tx-hw} ${ty-ht} ${tx} ${ty-ht} Q ${tx+hw} ${ty-ht} ${tx+hw} ${ty-ht*0.7} L ${tx+hw} ${ty} Z"
+        fill="url(#${grad})" stroke="rgba(255,255,255,0.07)" stroke-width="0.6"/>
+      <ellipse cx="${tx}" cy="${ty-ht*0.5}" rx="${hw*0.6}" ry="${ht*0.2}" fill="rgba(255,255,255,0.04)"/>
+    </g>`;
+  }
+}
+
+// ─── LOWER ARCH BUILDER ───
+function buildLowerArch(W,H) {
+  const cx = W/2, cy = H/2 + 90;
+  return `
+  <!-- GINGIVA LOWER -->
+  <path d="M ${cx-175} ${cy+10}
+    Q ${cx-145} ${cy+12} ${cx-100} ${cy+14}
+    Q ${cx-50}  ${cy+16} ${cx}     ${cy+17}
+    Q ${cx+50}  ${cy+16} ${cx+100} ${cy+14}
+    Q ${cx+145} ${cy+12} ${cx+175} ${cy+10}
+    Q ${cx+185} ${cy-15} ${cx+175} ${cy-35}
+    Q ${cx+140} ${cy-46} ${cx+95}  ${cy-50}
+    Q ${cx+50}  ${cy-54} ${cx}     ${cy-55}
+    Q ${cx-50}  ${cy-54} ${cx-95}  ${cy-50}
+    Q ${cx-140} ${cy-46} ${cx-175} ${cy-35}
+    Q ${cx-185} ${cy-15} ${cx-175} ${cy+10} Z"
+    fill="url(#gg)" opacity="0.5"/>
+
+  ${buildToothAt(cx-170, cy-10, 36, 48, 0.68,'molar',   'tg3')}
+  ${buildToothAt(cx-128, cy-16, 34, 46, 0.78,'molar',   'tg3')}
+  ${buildToothAt(cx-88,  cy-22, 30, 44, 0.88,'premolar','tg2')}
+  ${buildToothAt(cx-56,  cy-28, 26, 42, 0.94,'premolar','tg2')}
+  ${buildToothAt(cx-30,  cy-32, 24, 40, 0.98,'canine',  'tg1')}
+  ${buildToothAt(cx-8,   cy-36, 20, 38, 1.0, 'incisor', 'tg1')}
+  ${buildToothAt(cx+10,  cy-36, 20, 38, 1.0, 'incisor', 'tg1')}
+  ${buildToothAt(cx+30,  cy-32, 24, 40, 0.98,'canine',  'tg1')}
+  ${buildToothAt(cx+54,  cy-28, 26, 42, 0.94,'premolar','tg2')}
+  ${buildToothAt(cx+86,  cy-22, 30, 44, 0.88,'premolar','tg2')}
+  ${buildToothAt(cx+126, cy-16, 34, 46, 0.78,'molar',   'tg3')}
+  ${buildToothAt(cx+168, cy-10, 36, 48, 0.68,'molar',   'tg3')}
+  `;
+}
+
+// ─── MARGIN LINE ───
+function buildMarginLine(W,H,dev) {
+  const cx = W/2, cy = H/2 - 10;
+  // Margin follows cervical line of upper teeth
+  // Full arch or anterior only depending on device
+  const fullPath = `M ${cx-210} ${cy+64}
+    Q ${cx-160} ${cy+57} ${cx-110} ${cy+50}
+    Q ${cx-60}  ${cy+45} ${cx}     ${cy+44}
+    Q ${cx+60}  ${cy+45} ${cx+110} ${cy+50}
+    Q ${cx+160} ${cy+57} ${cx+210} ${cy+64}`;
+
+  const antPath = `M ${cx-50} ${cy+45}
+    Q ${cx}    ${cy+42} ${cx+50} ${cy+45}`;
+
+  const path = (dev==='kois'||dev==='nti') ? antPath : fullPath;
+
+  return `
+  <!-- MARGIN GLOW AREA -->
+  <path d="${path}" fill="none" stroke="rgba(255,122,0,0.12)" stroke-width="18" class="margin-glow"/>
+  <!-- MARGIN MAIN LINE -->
+  <path d="${path}" fill="none" stroke="#FF7A00" stroke-width="2"
+    stroke-dasharray="6,4" class="margin-path"
+    filter="url(#glow1)"/>
+  <!-- MARGIN DOTS -->
+  ${[cx-180,cx-120,cx-60,cx,cx+60,cx+120,cx+180].map(x=>`
+    <circle cx="${x}" cy="${cy+52-(Math.abs(x-cx)/180)*8}" r="3"
+      fill="#FF7A00" filter="url(#glow1)" class="cpt"
+      style="animation-delay:${(x-cx+200)/120}s"/>
+  `).join('')}
+  `;
+}
+
+// ─── SPLINT OVERLAY ───
+function buildSplintOverlay(W,H,dev,mat) {
+  const cx = W/2, cy = H/2 - 10;
+  const mp = matProps[mat];
+  const dp = devProps[dev];
+
+  let bodyPath, edgePath, coverageLabel;
+  if(dev==='michigan'||dev==='gelb') {
+    bodyPath = `M ${cx-215} ${cy+40}
+      Q ${cx-180} ${cy+30} ${cx-130} ${cy+20}
+      Q ${cx-70}  ${cy+13} ${cx}     ${cy+12}
+      Q ${cx+70}  ${cy+13} ${cx+130} ${cy+20}
+      Q ${cx+180} ${cy+30} ${cx+215} ${cy+40}
+      Q ${cx+225} ${cy+62} ${cx+220} ${cy+88}
+      Q ${cx+195} ${cy+100} ${cx+150} ${cy+106}
+      Q ${cx+80}  ${cy+112} ${cx}     ${cy+114}
+      Q ${cx-80}  ${cy+112} ${cx-150} ${cy+106}
+      Q ${cx-195} ${cy+100} ${cx-220} ${cy+88}
+      Q ${cx-225} ${cy+62} ${cx-215} ${cy+40} Z`;
+    edgePath = `M ${cx-215} ${cy+40} Q ${cx} ${cy+12} ${cx+215} ${cy+40}`;
+    coverageLabel = 'FULL ARCH COVERAGE';
+  } else if(dev==='kois') {
+    bodyPath = `M ${cx-54} ${cy+14}
+      Q ${cx}    ${cy+10} ${cx+54} ${cy+14}
+      Q ${cx+60} ${cy+34} ${cx+56} ${cy+54}
+      Q ${cx}    ${cy+58} ${cx-56} ${cy+54}
+      Q ${cx-60} ${cy+34} ${cx-54} ${cy+14} Z`;
+    edgePath = `M ${cx-54} ${cy+14} Q ${cx} ${cy+10} ${cx+54} ${cy+14}`;
+    coverageLabel = 'ANTERIOR PLATFORM';
+  } else { // nti
+    bodyPath = `M ${cx-26} ${cy+14}
+      Q ${cx}    ${cy+10} ${cx+26} ${cy+14}
+      Q ${cx+30} ${cy+34} ${cx+28} ${cy+50}
+      Q ${cx}    ${cy+54} ${cx-28} ${cy+50}
+      Q ${cx-30} ${cy+34} ${cx-26} ${cy+14} Z`;
+    edgePath = `M ${cx-26} ${cy+14} Q ${cx} ${cy+10} ${cx+26} ${cy+14}`;
+    coverageLabel = 'MINIMAL 2-TOOTH';
+  }
+
+  // Contact points
+  const cpts = dev==='kois'||dev==='nti'
+    ? [cx-18,cx,cx+18]
+    : [cx-170,cx-110,cx-50,cx,cx+50,cx+110,cx+170];
+
+  const matColor = dev==='kois' ? 'rgba(255,180,80,0.30)' :
+                   dev==='gelb' ? 'rgba(80,255,180,0.25)' : mp.color;
+  const matStroke = dev==='kois' ? 'rgba(255,180,80,0.7)' :
+                    dev==='gelb' ? 'rgba(80,255,180,0.6)' : mp.stroke;
+  const matGlow = dev==='kois' ? 'rgba(255,180,80,0.12)' :
+                  dev==='gelb' ? 'rgba(80,255,180,0.08)' : mp.glow;
+
+  return `
+  <!-- SPLINT GLOW -->
+  <path d="${bodyPath}" fill="${matGlow}" stroke="none" filter="url(#glow2)"/>
+  <!-- SPLINT BODY -->
+  <path d="${bodyPath}" fill="${matColor}" stroke="${matStroke}" stroke-width="1.5"/>
+  <!-- TOP EDGE HIGHLIGHT -->
+  <path d="${edgePath}" fill="none" stroke="${matStroke}" stroke-width="2.5" filter="url(#glow1)"/>
+  <!-- FLAT OCCLUSAL SURFACE LINES (showing flat plane) -->
+  <path d="${bodyPath}" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="0.5" stroke-dasharray="20,12"/>
+  <!-- CONTACT POINTS -->
+  ${cpts.map((x,i)=>{
+    const yoff = Math.abs(x-cx)/180 * 6;
+    return `
+    <circle cx="${x}" cy="${cy+76-yoff}" r="3.5" fill="${matStroke}" filter="url(#glow1)" opacity="0.85">
+      <animate attributeName="r" values="3.5;5;3.5" dur="${1.8+i*0.3}s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.85;0.35;0.85" dur="${1.8+i*0.3}s" repeatCount="indefinite"/>
+    </circle>`;
+  }).join('')}
+  <!-- LABEL -->
+  <text x="${cx}" y="${cy+130}" fill="${matStroke}" font-size="9"
+    font-family="IBM Plex Mono,monospace" text-anchor="middle" letter-spacing="3" opacity="0.7">${coverageLabel}</text>
+  <!-- MEASUREMENT: VD -->
+  <line x1="${cx+240}" y1="${cy+12}" x2="${cx+240}" y2="${cy+76}" stroke="rgba(255,255,255,0.2)" stroke-width="0.5" stroke-dasharray="3,3"/>
+  <line x1="${cx+235}" y1="${cy+12}" x2="${cx+245}" y2="${cy+12}" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>
+  <line x1="${cx+235}" y1="${cy+76}" x2="${cx+245}" y2="${cy+76}" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>
+  <text x="${cx+250}" y="${cy+48}" fill="rgba(255,255,255,0.35)" font-size="8" font-family="IBM Plex Mono,monospace">+2.0mm</text>
+  `;
+}
+
+// ─── INIT ───
+drawScene('empty');
+setTimeout(()=>nt('Добро пожаловать · Загрузите STL модели'), 900);
+
+window.addEventListener('load', ()=>{});
+</script>
+</body>
+</html>

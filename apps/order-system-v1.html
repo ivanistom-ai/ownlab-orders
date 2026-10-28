@@ -1,0 +1,2450 @@
+<!DOCTYPE html>
+<!--
+================================================================================
+  OWN DIGITAL LABORATORY — СИСТЕМА УПРАВЛЕНИЯ ЗАКАЗАМИ v1.0
+================================================================================
+  Бренд:    OWN Digital Laboratory
+  Автор:    Жегало Иван Иванович
+  Версия:   1.0.0
+  Стек:     Vanilla HTML/CSS/JS (без зависимостей)
+
+  ТЗ ДЛЯ РАЗРАБОТЧИКА:
+  ─────────────────────────────────────────────────────────────────────────────
+  1. Этот файл — полный UI-прототип системы. Реализует всю клиентскую логику.
+  2. Бэкенд: рекомендован Next.js 14 (App Router) + Supabase (PostgreSQL + Auth)
+  3. Уведомления: Telegram Bot API + Email (Resend или SendGrid)
+  4. Хранилище файлов: Supabase Storage или S3-совместимое
+  5. Деплой: Vercel (фронт) + Supabase (бэк)
+  6. Домен: lab.ownlab.ru или orders.ownlab.ru
+
+  РОЛИ ПОЛЬЗОВАТЕЛЕЙ:
+  ─────────────────────────────────────────────────────────────────────────────
+  - admin     : Иван (владелец). Полный доступ ко всему.
+  - manager   : Менеджер лаборатории. Создаёт заказы, меняет статусы.
+  - technician: Техник. Видит свои заказы, меняет статусы своих этапов.
+  - doctor    : Врач/клиника. Создаёт заказы, видит только свои, согласует дизайн.
+
+  БАЗА ДАННЫХ (Supabase / PostgreSQL):
+  ─────────────────────────────────────────────────────────────────────────────
+  TABLE orders (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_number  TEXT UNIQUE,           -- напр. OWN-0051
+    patient_name  TEXT NOT NULL,
+    clinic_name   TEXT NOT NULL,
+    doctor_name   TEXT,
+    work_type     TEXT NOT NULL,
+    units_count   INT,
+    shade         TEXT,
+    deadline      DATE,
+    technician_id UUID REFERENCES users(id),
+    current_stage INT DEFAULT 1,
+    progress      INT DEFAULT 0,
+    status        TEXT DEFAULT 'active', -- active | done | cancelled
+    notes         TEXT,
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ DEFAULT NOW()
+  );
+
+  TABLE order_stages (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id    UUID REFERENCES orders(id) ON DELETE CASCADE,
+    stage_num   INT NOT NULL,
+    stage_name  TEXT,
+    completed   BOOLEAN DEFAULT FALSE,
+    started_at  TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    comment     TEXT,
+    technician_id UUID REFERENCES users(id)
+  );
+
+  TABLE order_files (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id    UUID REFERENCES orders(id) ON DELETE CASCADE,
+    file_name   TEXT,
+    file_url    TEXT,
+    file_type   TEXT,   -- stl | photo | pdf | dicom
+    stage_num   INT,
+    uploaded_by UUID REFERENCES users(id),
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+  );
+
+  TABLE order_comments (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id    UUID REFERENCES orders(id) ON DELETE CASCADE,
+    user_id     UUID REFERENCES users(id),
+    user_name   TEXT,
+    user_role   TEXT,
+    message     TEXT,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+  );
+
+  TABLE users (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name        TEXT,
+    role        TEXT,   -- admin | manager | technician | doctor
+    email       TEXT UNIQUE,
+    telegram_id TEXT,
+    avatar_url  TEXT,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+  );
+
+  TELEGRAM УВЕДОМЛЕНИЯ (отправлять при):
+  ─────────────────────────────────────────────────────────────────────────────
+  - Создан новый заказ                 → менеджеру + технику
+  - Изменён статус                     → врачу + технику
+  - Этап 3: "Требуются данные"         → врачу
+  - Этап 6: Дизайн отправлен           → врачу
+  - Этап 9: QC пройден                 → менеджеру
+  - Этап 11: Передан в доставку        → врачу (с трек-номером)
+  - Этап 12: В пути                    → врачу
+  - Этап 13: Получена клиникой         → менеджеру + технику
+================================================================================
+-->
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OWN Digital Laboratory — Управление заказами</title>
+<link
+  href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+  rel="stylesheet"
+>
+<style>
+/* ============================================================
+   ДИЗАЙН-СИСТЕМА OWNLAB
+   Цвета: оранжевый #E8651A + тёмно-серая шкала
+   Типографика: Montserrat (основной) + JetBrains Mono (код/ID)
+   ============================================================ */
+:root {
+  /* Бренд */
+  --orange:       #E8651A;
+  --orange-dim:   rgba(232, 101, 26, 0.12);
+  --orange-glow:  rgba(232, 101, 26, 0.30);
+  --orange-dark:  #D45A10;
+
+  /* Серая шкала */
+  --gray-950: #080808;
+  --gray-900: #0D0D0D;
+  --gray-800: #141414;
+  --gray-750: #191919;
+  --gray-700: #1E1E1E;
+  --gray-600: #282828;
+  --gray-550: #323232;
+  --gray-500: #3A3A3A;
+  --gray-400: #555555;
+  --gray-300: #888888;
+  --gray-200: #AAAAAA;
+  --gray-100: #CCCCCC;
+  --white:    #F2F2F2;
+
+  /* Статусы */
+  --green:    #22C55E;
+  --yellow:   #EAB308;
+  --blue:     #3B82F6;
+  --purple:   #A855F7;
+  --red:      #EF4444;
+  --success:  #10B981;
+
+  /* Размеры */
+  --header-h: 58px;
+  --sidebar-w: 248px;
+  --detail-w:  540px;
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
+
+/* ── RESET ─────────────────────────────────────── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: 'Montserrat', sans-serif;
+  background: var(--gray-900);
+  color: var(--white);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+button { font-family: 'Montserrat', sans-serif; cursor: pointer; }
+input, select, textarea { font-family: 'Montserrat', sans-serif; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--gray-500); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
+
+/* ── HEADER ─────────────────────────────────────── */
+.header {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: var(--header-h);
+  background: var(--gray-800);
+  border-bottom: 1px solid var(--gray-600);
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 200;
+}
+.header-logo {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  user-select: none;
+}
+.logo-own {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--orange);
+  letter-spacing: 3px;
+}
+.logo-rest {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--gray-300);
+  letter-spacing: 2.5px;
+  margin-left: 8px;
+  text-transform: uppercase;
+}
+.header-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.env-badge {
+  background: var(--orange-dim);
+  border: 1px solid var(--orange-glow);
+  color: var(--orange);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 4px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.hdr-icon-btn {
+  position: relative;
+  background: none;
+  border: none;
+  font-size: 18px;
+  padding: 4px;
+  color: var(--gray-300);
+  transition: color 0.2s;
+}
+.hdr-icon-btn:hover { color: var(--white); }
+.notif-dot {
+  position: absolute; top: 2px; right: 2px;
+  width: 7px; height: 7px;
+  background: var(--orange);
+  border-radius: 50%;
+  border: 1.5px solid var(--gray-800);
+  animation: pulse 2s infinite;
+}
+.avatar {
+  width: 32px; height: 32px;
+  background: var(--gray-600);
+  border-radius: 50%;
+  border: 1.5px solid var(--gray-500);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+  color: var(--orange);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* ── LAYOUT ─────────────────────────────────────── */
+.layout {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  height: 100vh;
+  padding-top: var(--header-h);
+}
+
+/* ── SIDEBAR ─────────────────────────────────────── */
+.sidebar {
+  background: var(--gray-800);
+  border-right: 1px solid var(--gray-600);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 0 24px;
+}
+.sidebar-block { padding: 0 8px; }
+.sidebar-block + .sidebar-block { margin-top: 4px; }
+.s-divider { height: 1px; background: var(--gray-600); margin: 12px 14px; }
+.s-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--gray-400);
+  text-transform: uppercase;
+  padding: 0 8px;
+  margin-bottom: 6px;
+  display: block;
+}
+/* Кнопка "Новый заказ" */
+.btn-new-order {
+  width: 100%;
+  padding: 11px 14px;
+  background: var(--orange);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  display: flex; align-items: center; justify-content: center;
+  gap: 7px;
+  margin-bottom: 14px;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+}
+.btn-new-order:hover {
+  background: var(--orange-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px var(--orange-glow);
+}
+.btn-new-order:active { transform: translateY(0); }
+
+/* Sidebar nav items */
+.nav-item {
+  display: flex; align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--gray-200);
+  transition: all 0.15s;
+  margin-bottom: 2px;
+  border-left: 2px solid transparent;
+  user-select: none;
+}
+.nav-item:hover { background: var(--gray-700); color: var(--white); }
+.nav-item.active {
+  background: var(--orange-dim);
+  color: var(--orange);
+  border-left-color: var(--orange);
+}
+.nav-item .nav-count {
+  margin-left: auto;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 500;
+  color: var(--gray-400);
+}
+.nav-item.active .nav-count { color: var(--orange); }
+
+/* Sidebar bottom stats */
+.sidebar-stats {
+  margin-top: auto;
+  padding: 12px 14px 0;
+}
+.sidebar-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 11px;
+}
+.sidebar-stat-row .sk { color: var(--gray-400); }
+.sidebar-stat-row .sv {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  color: var(--white);
+}
+.sidebar-stat-row .sv.orange { color: var(--orange); }
+.sidebar-stat-row .sv.green  { color: var(--green); }
+
+/* ── MAIN CONTENT ─────────────────────────────────── */
+.main {
+  overflow-y: auto;
+  background: var(--gray-900);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Топ-бар: поиск + статистика */
+.topbar {
+  padding: 20px 24px 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+.search-wrap {
+  flex: 1;
+  max-width: 400px;
+  position: relative;
+}
+.search-wrap input {
+  width: 100%;
+  background: var(--gray-800);
+  border: 1px solid var(--gray-600);
+  border-radius: var(--radius-md);
+  padding: 10px 14px 10px 38px;
+  color: var(--white);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.search-wrap input:focus { border-color: var(--orange); }
+.search-wrap input::placeholder { color: var(--gray-400); }
+.search-icon {
+  position: absolute; left: 12px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  color: var(--gray-400);
+  pointer-events: none;
+}
+.topbar-right { display: flex; gap: 10px; }
+.stat-chip {
+  background: var(--gray-800);
+  border: 1px solid var(--gray-600);
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.stat-chip .sn {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--orange);
+  line-height: 1;
+}
+.stat-chip .sl {
+  font-size: 10px;
+  color: var(--gray-300);
+  font-weight: 500;
+}
+.stat-chip.green .sn { color: var(--green); }
+.stat-chip.red .sn   { color: var(--red); }
+
+/* Секция заказов */
+.orders-section { padding: 18px 24px 24px; }
+.section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.section-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gray-300);
+}
+.btn-sort {
+  background: var(--gray-800);
+  border: 1px solid var(--gray-600);
+  color: var(--gray-300);
+  font-size: 11px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s;
+}
+.btn-sort:hover { background: var(--gray-700); color: var(--white); }
+
+/* ── КАРТОЧКИ ЗАКАЗОВ ─────────────────────────────── */
+#ordersList { display: flex; flex-direction: column; gap: 7px; }
+
+.order-card {
+  background: var(--gray-800);
+  border: 1px solid var(--gray-600);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+/* Цветная левая полоса по статусу */
+.order-card::before {
+  content: '';
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+.order-card.c-green::before    { background: var(--green); }
+.order-card.c-yellow::before   { background: var(--yellow); }
+.order-card.c-blue::before     { background: var(--blue); }
+.order-card.c-orange::before   { background: var(--orange); }
+.order-card.c-delivery::before { background: var(--purple); }
+.order-card.c-done::before     { background: var(--success); }
+
+.order-card:hover {
+  border-color: var(--gray-500);
+  transform: translateX(2px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+}
+.order-card.is-selected {
+  border-color: var(--orange);
+  background: rgba(232,101,26,0.04);
+}
+/* Срочные — мигающая рамка */
+.order-card.is-urgent {
+  box-shadow: 0 0 0 1px rgba(239,68,68,0.25);
+}
+
+.card-top {
+  display: flex; align-items: center;
+  gap: 10px; margin-bottom: 10px;
+  flex-wrap: nowrap;
+}
+.card-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--orange);
+  background: var(--orange-dim);
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.card-patient {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--white);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-type {
+  font-size: 10px;
+  color: var(--gray-300);
+  background: var(--gray-700);
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.card-deadline {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--gray-400);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.card-deadline.urgent { color: var(--red); font-weight: 600; }
+
+.card-bottom {
+  display: flex; align-items: center;
+  gap: 10px;
+}
+.card-clinic {
+  font-size: 11px;
+  color: var(--gray-300);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Бейдж статуса */
+.status-badge {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.status-badge.c-green    { background: rgba(34,197,94,0.12);  color: var(--green); }
+.status-badge.c-yellow   { background: rgba(234,179,8,0.12);  color: var(--yellow); }
+.status-badge.c-blue     { background: rgba(59,130,246,0.12); color: var(--blue); }
+.status-badge.c-orange   { background: rgba(232,101,26,0.12); color: var(--orange); }
+.status-badge.c-delivery { background: rgba(168,85,247,0.12); color: var(--purple); }
+.status-badge.c-done     { background: rgba(16,185,129,0.12); color: var(--success); }
+
+/* Прогресс-бар */
+.progress-bar {
+  height: 3px;
+  background: var(--gray-600);
+  border-radius: 2px;
+  margin-top: 11px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--orange), #FF9500);
+  border-radius: 2px;
+  transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* ── ПАНЕЛЬ ДЕТАЛЕЙ ─────────────────────────────── */
+.detail-panel {
+  display: none;
+  position: fixed;
+  top: var(--header-h); right: 0; bottom: 0;
+  width: var(--detail-w);
+  background: var(--gray-800);
+  border-left: 1px solid var(--gray-600);
+  z-index: 100;
+  overflow: hidden;
+  flex-direction: column;
+  box-shadow: -20px 0 60px rgba(0,0,0,0.5);
+}
+.detail-panel.open {
+  display: flex;
+  animation: slideIn 0.25s cubic-bezier(0.4,0,0.2,1);
+}
+@keyframes slideIn {
+  from { transform: translateX(30px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* Хедер детальной панели */
+.detail-header {
+  padding: 18px 24px 16px;
+  border-bottom: 1px solid var(--gray-600);
+  flex-shrink: 0;
+}
+.detail-header-row1 {
+  display: flex; align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.detail-title {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--white);
+}
+.detail-subtitle {
+  font-size: 11px;
+  color: var(--gray-300);
+  margin-top: 3px;
+}
+.btn-close {
+  background: var(--gray-700);
+  border: 1px solid var(--gray-600);
+  color: var(--gray-300);
+  width: 30px; height: 30px;
+  border-radius: 6px;
+  font-size: 15px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+  margin-left: 12px;
+}
+.btn-close:hover { background: var(--gray-600); color: var(--white); }
+
+.detail-meta {
+  display: flex; gap: 7px; flex-wrap: wrap;
+}
+.meta-tag {
+  font-size: 10px;
+  color: var(--gray-300);
+  background: var(--gray-700);
+  border: 1px solid var(--gray-600);
+  padding: 3px 9px;
+  border-radius: 4px;
+  display: flex; align-items: center; gap: 5px;
+}
+
+/* Табы в детальной панели */
+.detail-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--gray-600);
+  flex-shrink: 0;
+}
+.detail-tab {
+  flex: 1;
+  padding: 11px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gray-300);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.3px;
+}
+.detail-tab:hover { color: var(--white); background: var(--gray-750); }
+.detail-tab.active {
+  color: var(--orange);
+  border-bottom-color: var(--orange);
+  background: var(--orange-dim);
+}
+
+/* Скроллируемая область */
+.detail-body {
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Инфо-карточка */
+.info-section { padding: 16px 24px 0; }
+.info-card {
+  background: var(--gray-700);
+  border: 1px solid var(--gray-600);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.info-card-title {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gray-400);
+  margin-bottom: 10px;
+}
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--gray-600);
+}
+.info-row:last-child { border-bottom: none; }
+.info-row .ik { font-size: 11px; color: var(--gray-400); }
+.info-row .iv {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--white);
+  text-align: right;
+}
+.info-row .iv.orange { color: var(--orange); }
+.info-row .iv.green  { color: var(--green); }
+.info-row .iv.red    { color: var(--red); }
+
+/* Прогресс в детали */
+.detail-progress-label {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: var(--gray-400);
+  margin-bottom: 6px;
+}
+.detail-progress-label span:last-child {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  color: var(--orange);
+}
+
+/* Файлы */
+.files-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+.file-item {
+  background: var(--gray-600);
+  border: 1px solid var(--gray-550);
+  border-radius: 6px;
+  padding: 10px 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 10px;
+  color: var(--gray-200);
+}
+.file-item:hover { background: var(--gray-500); border-color: var(--orange); color: var(--white); }
+.file-icon { font-size: 20px; margin-bottom: 5px; display: block; }
+.file-name { font-size: 9px; word-break: break-all; color: var(--gray-300); }
+
+/* ── ТАЙМЛАЙН ─────────────────────────────────────── */
+.timeline-section { padding: 16px 24px 24px; }
+.tl-header-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gray-400);
+  margin-bottom: 18px;
+}
+.timeline { display: flex; flex-direction: column; }
+
+.tl-item { display: flex; gap: 14px; }
+.tl-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 30px;
+  flex-shrink: 0;
+}
+.tl-dot {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  flex-shrink: 0;
+  border: 2px solid transparent;
+  transition: all 0.3s;
+  position: relative;
+  z-index: 2;
+}
+.tl-dot.s-done   { background: rgba(34,197,94,0.15); border-color: var(--green); }
+.tl-dot.s-active {
+  background: var(--orange-dim);
+  border-color: var(--orange);
+  box-shadow: 0 0 14px var(--orange-glow);
+}
+.tl-dot.s-pending { background: var(--gray-700); border-color: var(--gray-600); }
+.tl-dot.s-warning { background: rgba(234,179,8,0.15); border-color: var(--yellow); }
+
+.tl-connector {
+  width: 2px;
+  flex: 1;
+  min-height: 22px;
+  margin: 2px 0;
+  border-radius: 1px;
+}
+.tl-connector.s-done   { background: rgba(34,197,94,0.35); }
+.tl-connector.s-active { background: linear-gradient(to bottom, var(--orange) 0%, var(--gray-600) 100%); }
+.tl-connector.s-pending { background: var(--gray-700); }
+
+.tl-content {
+  flex: 1;
+  padding-bottom: 20px;
+}
+.tl-stage-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 3px;
+  min-height: 28px;
+}
+.tl-stage-name {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.tl-stage-name.s-done    { color: var(--gray-300); }
+.tl-stage-name.s-active  { color: var(--white); }
+.tl-stage-name.s-pending { color: var(--gray-500); }
+.tl-stage-name.s-warning { color: var(--yellow); }
+
+/* Активный индикатор */
+.active-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 8px; font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--orange);
+  background: var(--orange-dim);
+  border: 1px solid var(--orange-glow);
+  padding: 2px 7px;
+  border-radius: 10px;
+  text-transform: uppercase;
+}
+.active-badge-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--orange);
+  animation: pulse 1.8s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
+}
+
+.tl-timestamp {
+  margin-left: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--gray-500);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.tl-timestamp.active { color: var(--orange); }
+
+.tl-desc {
+  font-size: 11px;
+  color: var(--gray-400);
+  line-height: 1.6;
+  margin-bottom: 7px;
+}
+.tl-desc.active { color: var(--gray-200); }
+
+/* Подпункты этапа */
+.tl-subs { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.tl-sub-item {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 10px;
+  color: var(--gray-500);
+}
+.tl-sub-item.done { color: var(--gray-300); }
+.sub-check {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--gray-600);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px;
+  flex-shrink: 0;
+  color: transparent;
+}
+.tl-sub-item.done .sub-check {
+  background: rgba(34,197,94,0.15);
+  border-color: var(--green);
+  color: var(--green);
+}
+
+/* Блок согласования (этап 6) */
+.approval-block {
+  background: var(--gray-700);
+  border: 1px solid var(--gray-600);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  margin-top: 8px;
+}
+.approval-status {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600;
+  margin-bottom: 10px;
+}
+.approval-status.waiting { color: var(--yellow); }
+.approval-status.approved { color: var(--green); }
+.approval-status.revision  { color: var(--red); }
+
+/* Трекинг-блок (этап 12) */
+.tracking-block {
+  background: var(--gray-700);
+  border: 1px solid var(--gray-600);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  margin-top: 8px;
+  font-size: 11px;
+}
+.tracking-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--orange);
+  margin: 4px 0;
+  letter-spacing: 0.5px;
+}
+.tracking-status {
+  font-size: 10px;
+  color: var(--gray-300);
+}
+
+/* Кнопки действий в таймлайне */
+.tl-actions {
+  display: flex; gap: 7px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.tl-btn {
+  padding: 7px 13px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  transition: all 0.2s;
+  letter-spacing: 0.2px;
+}
+.tl-btn.primary {
+  background: var(--orange);
+  color: #fff;
+}
+.tl-btn.primary:hover { background: var(--orange-dark); }
+.tl-btn.secondary {
+  background: var(--gray-700);
+  color: var(--gray-200);
+  border: 1px solid var(--gray-600);
+}
+.tl-btn.secondary:hover { background: var(--gray-600); color: var(--white); }
+.tl-btn.warning {
+  background: rgba(234,179,8,0.1);
+  color: var(--yellow);
+  border: 1px solid rgba(234,179,8,0.3);
+}
+.tl-btn.danger {
+  background: rgba(239,68,68,0.1);
+  color: var(--red);
+  border: 1px solid rgba(239,68,68,0.3);
+}
+.tl-btn.success {
+  background: rgba(34,197,94,0.1);
+  color: var(--green);
+  border: 1px solid rgba(34,197,94,0.3);
+}
+.tl-btn.purple {
+  background: rgba(168,85,247,0.1);
+  color: var(--purple);
+  border: 1px solid rgba(168,85,247,0.3);
+}
+
+/* ── КОММЕНТАРИИ ───────────────────────────────── */
+.comments-section { padding: 16px 24px 24px; }
+.comment-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.comment-item {
+  display: flex; gap: 10px;
+}
+.comment-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700;
+  flex-shrink: 0;
+}
+.comment-avatar.admin { background: var(--orange-dim); color: var(--orange); border: 1px solid var(--orange-glow); }
+.comment-avatar.tech  { background: rgba(59,130,246,0.15); color: var(--blue); border: 1px solid rgba(59,130,246,0.3); }
+.comment-avatar.doc   { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+.comment-bubble {
+  background: var(--gray-700);
+  border: 1px solid var(--gray-600);
+  border-radius: 3px 8px 8px 8px;
+  padding: 9px 12px;
+  flex: 1;
+}
+.comment-meta {
+  display: flex; gap: 8px; align-items: center;
+  margin-bottom: 5px;
+}
+.comment-author {
+  font-size: 11px; font-weight: 600;
+  color: var(--white);
+}
+.comment-role {
+  font-size: 9px;
+  color: var(--gray-400);
+  background: var(--gray-600);
+  padding: 1px 6px; border-radius: 3px;
+}
+.comment-time {
+  font-size: 9px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--gray-500);
+  margin-left: auto;
+}
+.comment-text { font-size: 11px; color: var(--gray-200); line-height: 1.6; }
+.comment-input-wrap {
+  display: flex; gap: 8px; align-items: flex-end;
+}
+.comment-input {
+  flex: 1;
+  background: var(--gray-700);
+  border: 1px solid var(--gray-600);
+  border-radius: 7px;
+  padding: 9px 12px;
+  color: var(--white);
+  font-size: 12px;
+  resize: none;
+  min-height: 60px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.comment-input:focus { border-color: var(--orange); }
+.comment-input::placeholder { color: var(--gray-500); }
+.btn-send {
+  background: var(--orange);
+  border: none;
+  color: #fff;
+  width: 36px; height: 36px;
+  border-radius: 7px;
+  font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.btn-send:hover { background: var(--orange-dark); }
+
+/* ── МОДАЛЬНОЕ ОКНО НОВОГО ЗАКАЗА ─────────────────── */
+.modal-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.8);
+  backdrop-filter: blur(4px);
+  z-index: 500;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--gray-800);
+  border: 1px solid var(--gray-600);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  width: 560px;
+  max-height: 92vh;
+  overflow-y: auto;
+  animation: modalIn 0.2s cubic-bezier(0.4,0,0.2,1);
+}
+@keyframes modalIn {
+  from { transform: scale(0.95) translateY(10px); opacity: 0; }
+  to   { transform: scale(1) translateY(0);       opacity: 1; }
+}
+.modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.modal-subtitle {
+  font-size: 11px;
+  color: var(--gray-400);
+  margin-bottom: 24px;
+  display: flex; align-items: center; gap: 6px;
+}
+.modal-subtitle::before {
+  content: '';
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--orange);
+}
+
+/* Форма */
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-group { margin-bottom: 14px; }
+.form-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--gray-300);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+.form-label .req { color: var(--orange); margin-left: 2px; }
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  background: var(--gray-700);
+  border: 1px solid var(--gray-600);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--white);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px var(--orange-dim);
+}
+.form-input::placeholder, .form-textarea::placeholder { color: var(--gray-500); }
+.form-select option { background: var(--gray-700); color: var(--white); }
+.form-textarea { resize: vertical; min-height: 80px; }
+
+/* Загрузка файлов */
+.upload-zone {
+  border: 2px dashed var(--gray-550);
+  border-radius: var(--radius-md);
+  padding: 22px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  color: var(--gray-400);
+}
+.upload-zone:hover {
+  border-color: var(--orange);
+  background: var(--orange-dim);
+  color: var(--gray-200);
+}
+.upload-icon { font-size: 28px; display: block; margin-bottom: 8px; }
+.upload-text { font-size: 12px; margin-bottom: 4px; }
+.upload-hint { font-size: 9px; color: var(--gray-500); letter-spacing: 0.5px; }
+.upload-link { color: var(--orange); text-decoration: none; }
+
+/* Чекбокс уведомлений */
+.checkbox-group { display: flex; align-items: center; gap: 8px; }
+.form-checkbox {
+  width: 16px; height: 16px;
+  accent-color: var(--orange);
+  cursor: pointer;
+}
+.checkbox-label { font-size: 11px; color: var(--gray-300); cursor: pointer; }
+
+/* Кнопки модалки */
+.modal-actions { display: flex; gap: 10px; margin-top: 24px; }
+.btn-modal {
+  flex: 1;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  transition: all 0.2s;
+}
+.btn-modal.primary { background: var(--orange); color: #fff; }
+.btn-modal.primary:hover {
+  background: var(--orange-dark);
+  box-shadow: 0 4px 16px var(--orange-glow);
+}
+.btn-modal.cancel {
+  background: var(--gray-700);
+  color: var(--gray-300);
+  border: 1px solid var(--gray-600);
+}
+.btn-modal.cancel:hover { background: var(--gray-600); color: var(--white); }
+
+/* Разделитель в форме */
+.form-divider {
+  height: 1px;
+  background: var(--gray-600);
+  margin: 18px 0;
+}
+.form-section-title {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gray-400);
+  margin-bottom: 14px;
+}
+
+/* ── УВЕДОМЛЕНИЕ TOAST ─────────────────────────── */
+.toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: var(--gray-700);
+  border: 1px solid var(--gray-600);
+  border-left: 3px solid var(--green);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  display: flex; align-items: center; gap: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 999;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+  pointer-events: none;
+  min-width: 280px;
+}
+.toast.visible { opacity: 1; transform: translateY(0); }
+.toast-icon { font-size: 18px; }
+.toast-text { flex: 1; }
+.toast-title { font-size: 12px; font-weight: 700; color: var(--white); }
+.toast-sub   { font-size: 10px; color: var(--gray-300); margin-top: 2px; }
+.toast.error { border-left-color: var(--red); }
+.toast.warning { border-left-color: var(--yellow); }
+
+/* Пустое состояние */
+.empty-state {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 60px 24px;
+  text-align: center;
+  color: var(--gray-400);
+  gap: 12px;
+}
+.empty-state-icon { font-size: 40px; }
+.empty-state-text { font-size: 13px; font-weight: 600; color: var(--gray-300); }
+.empty-state-sub  { font-size: 11px; }
+
+/* Колбэк-оверлей для мобайл */
+@media (max-width: 900px) {
+  :root { --sidebar-w: 0px; --detail-w: 100vw; }
+  .sidebar { display: none; }
+  .detail-panel { width: 100vw; }
+}
+</style>
+</head>
+<body>
+
+<!-- ================================================================
+     HEADER
+     ================================================================ -->
+<header class="header">
+  <div class="header-logo">
+    <span class="logo-own">OWN</span>
+    <span class="logo-rest">Digital Laboratory</span>
+  </div>
+  <div class="header-center">
+    <div class="env-badge">Система заказов v1.0</div>
+  </div>
+  <div class="header-right">
+    <!-- Уведомления -->
+    <button class="hdr-icon-btn" title="Уведомления" onclick="showToast('3 новых события','Требует вашего внимания','warning')">
+      🔔
+      <div class="notif-dot"></div>
+    </button>
+    <!-- Аватар / профиль -->
+    <div class="avatar" title="Иван Жегало — Администратор">ИЖ</div>
+  </div>
+</header>
+
+<!-- ================================================================
+     LAYOUT
+     ================================================================ -->
+<div class="layout">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar">
+    <div class="sidebar-block">
+      <button class="btn-new-order" onclick="openNewOrderModal()">
+        <span style="font-size:16px;line-height:1">＋</span>
+        Новый заказ
+      </button>
+
+      <span class="s-label">По статусу</span>
+      <div class="nav-item active" data-filter="all" onclick="applyFilter('all', this)">
+        <span>📋</span> Все заказы
+        <span class="nav-count" id="cnt-all">6</span>
+      </div>
+      <div class="nav-item" data-filter="green" onclick="applyFilter('green', this)">
+        <span>🟢</span> Приём / проверка
+        <span class="nav-count" id="cnt-green">2</span>
+      </div>
+      <div class="nav-item" data-filter="yellow" onclick="applyFilter('yellow', this)">
+        <span>🟡</span> Анализ / план
+        <span class="nav-count" id="cnt-yellow">1</span>
+      </div>
+      <div class="nav-item" data-filter="blue" onclick="applyFilter('blue', this)">
+        <span>🔵</span> Производство
+        <span class="nav-count" id="cnt-blue">1</span>
+      </div>
+      <div class="nav-item" data-filter="orange" onclick="applyFilter('orange', this)">
+        <span>🟠</span> Финишинг / QC
+        <span class="nav-count" id="cnt-orange">1</span>
+      </div>
+      <div class="nav-item" data-filter="delivery" onclick="applyFilter('delivery', this)">
+        <span>🚚</span> Доставка
+        <span class="nav-count" id="cnt-delivery">1</span>
+      </div>
+      <div class="nav-item" data-filter="done" onclick="applyFilter('done', this)">
+        <span>✅</span> Завершённые
+        <span class="nav-count" id="cnt-done">0</span>
+      </div>
+    </div>
+
+    <div class="s-divider"></div>
+
+    <div class="sidebar-block">
+      <span class="s-label">По технику</span>
+      <div class="nav-item" data-tech="all" onclick="applyTechFilter('all', this)">
+        <span>👥</span> Все техники
+      </div>
+      <div class="nav-item" data-tech="Артём" onclick="applyTechFilter('Артём', this)">
+        <span style="color:var(--blue)">●</span> Артём К.
+      </div>
+      <div class="nav-item" data-tech="Мария" onclick="applyTechFilter('Мария', this)">
+        <span style="color:var(--orange)">●</span> Мария В.
+      </div>
+      <div class="nav-item" data-tech="Дмитрий" onclick="applyTechFilter('Дмитрий', this)">
+        <span style="color:var(--green)">●</span> Дмитрий Н.
+      </div>
+    </div>
+
+    <div class="s-divider"></div>
+
+    <div class="sidebar-block">
+      <span class="s-label">Разделы</span>
+      <div class="nav-item"><span>📊</span> Аналитика</div>
+      <div class="nav-item"><span>⏱</span> Контроль сроков</div>
+      <div class="nav-item"><span>💬</span> Переписка</div>
+      <div class="nav-item"><span>⚙️</span> Настройки</div>
+    </div>
+
+    <!-- Мини-статистика дня -->
+    <div class="sidebar-stats" style="padding:12px 14px 0">
+      <div class="s-divider" style="margin:0 0 10px"></div>
+      <span class="s-label">Сегодня</span>
+      <div class="sidebar-stat-row">
+        <span class="sk">Выполнено этапов</span>
+        <span class="sv orange">7</span>
+      </div>
+      <div class="sidebar-stat-row">
+        <span class="sk">Закрыто заказов</span>
+        <span class="sv green">2</span>
+      </div>
+      <div class="sidebar-stat-row">
+        <span class="sk">Просрочено</span>
+        <span class="sv" style="color:var(--red)">0</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ── -->
+  <main class="main" id="mainContent">
+
+    <!-- Топ-бар -->
+    <div class="topbar">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input
+          type="text"
+          placeholder="Поиск по пациенту, клинике, ID..."
+          oninput="searchOrders(this.value)"
+        >
+      </div>
+      <div class="topbar-right">
+        <div class="stat-chip">
+          <span class="sn" id="stat-active">6</span>
+          <span class="sl">Активных</span>
+        </div>
+        <div class="stat-chip red">
+          <span class="sn">2</span>
+          <span class="sl">⚡ Срочных</span>
+        </div>
+        <div class="stat-chip green">
+          <span class="sn">14</span>
+          <span class="sl">Закрыто / мес</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Список заказов -->
+    <div class="orders-section">
+      <div class="section-header">
+        <span class="section-title">Активные заказы</span>
+        <button class="btn-sort">По сроку ▾</button>
+      </div>
+      <div id="ordersList"></div>
+    </div>
+  </main>
+</div>
+
+<!-- ================================================================
+     ДЕТАЛЬ ЗАКАЗА (боковая панель)
+     ================================================================ -->
+<div class="detail-panel" id="detailPanel">
+
+  <!-- Хедер -->
+  <div class="detail-header">
+    <div class="detail-header-row1">
+      <div>
+        <div class="detail-title" id="dp-title">—</div>
+        <div class="detail-subtitle" id="dp-subtitle"></div>
+      </div>
+      <button class="btn-close" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="detail-meta" id="dp-meta"></div>
+  </div>
+
+  <!-- Табы -->
+  <div class="detail-tabs">
+    <button class="detail-tab active" onclick="switchTab('info', this)">📋 Информация</button>
+    <button class="detail-tab" onclick="switchTab('timeline', this)">📍 Этапы</button>
+    <button class="detail-tab" onclick="switchTab('files', this)">📁 Файлы</button>
+    <button class="detail-tab" onclick="switchTab('comments', this)">💬 Чат</button>
+  </div>
+
+  <!-- Тело -->
+  <div class="detail-body">
+
+    <!-- ТАБ: ИНФОРМАЦИЯ -->
+    <div id="tab-info" class="tab-content">
+      <div class="info-section">
+        <div class="info-card">
+          <div class="info-card-title">Детали заказа</div>
+          <div id="dp-info-rows"></div>
+        </div>
+
+        <!-- Прогресс -->
+        <div class="info-card">
+          <div class="info-card-title">Прогресс выполнения</div>
+          <div class="detail-progress-label">
+            <span id="dp-stage-label">—</span>
+            <span id="dp-progress-pct">0%</span>
+          </div>
+          <div class="progress-bar" style="height:6px">
+            <div class="progress-fill" id="dp-progress-fill" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- Ответственные -->
+        <div class="info-card">
+          <div class="info-card-title">Ответственные</div>
+          <div id="dp-team"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ТАБ: ЭТАПЫ -->
+    <div id="tab-timeline" class="tab-content" style="display:none">
+      <div class="timeline-section">
+        <div class="tl-header-label">📍 Этапность выполнения · 14 этапов</div>
+        <div class="timeline" id="dp-timeline"></div>
+      </div>
+    </div>
+
+    <!-- ТАБ: ФАЙЛЫ -->
+    <div id="tab-files" class="tab-content" style="display:none">
+      <div class="info-section">
+        <div class="info-card">
+          <div class="info-card-title">Прикреплённые файлы</div>
+          <div class="files-grid" id="dp-files"></div>
+        </div>
+        <div style="margin-top:12px">
+          <div class="upload-zone" onclick="showToast('Загрузка файлов','В полной версии: STL · DICOM · JPG · PDF до 500 МБ')">
+            <span class="upload-icon">📂</span>
+            <div class="upload-text">Перетащите файлы или <span class="upload-link">выберите</span></div>
+            <div class="upload-hint">STL · DICOM · JPG · PNG · PDF · до 500 МБ</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ТАБ: КОММЕНТАРИИ -->
+    <div id="tab-comments" class="tab-content" style="display:none">
+      <div class="comments-section">
+        <div class="comment-list" id="dp-comments"></div>
+        <div class="comment-input-wrap">
+          <textarea
+            class="comment-input"
+            id="commentInput"
+            placeholder="Напишите сообщение технику, менеджеру или врачу..."
+            rows="3"
+          ></textarea>
+          <button class="btn-send" onclick="sendComment()" title="Отправить">
+            ↑
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /detail-body -->
+</div><!-- /detail-panel -->
+
+<!-- ================================================================
+     МОДАЛЬНОЕ ОКНО: НОВЫЙ ЗАКАЗ
+     ================================================================ -->
+<div class="modal-overlay" id="modalOverlay" onclick="onOverlayClick(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">＋ Новый заказ-наряд</div>
+    <div class="modal-subtitle">OWN Digital Laboratory — Создание заявки</div>
+
+    <!-- Пациент и клиника -->
+    <div class="form-section-title">Пациент и клиника</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Пациент <span class="req">*</span></label>
+        <input class="form-input" id="f-patient" placeholder="Фамилия Имя Отчество">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Клиника / Врач <span class="req">*</span></label>
+        <input class="form-input" id="f-clinic" placeholder="Название клиники">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Имя врача</label>
+      <input class="form-input" id="f-doctor" placeholder="Фамилия И.О. врача">
+    </div>
+
+    <div class="form-divider"></div>
+    <div class="form-section-title">Работа</div>
+
+    <div class="form-group">
+      <label class="form-label">Тип работы <span class="req">*</span></label>
+      <select class="form-select" id="f-type">
+        <option value="">— Выберите тип работы —</option>
+        <option value="veneers_emax">Виниры (е.мах / фельспат)</option>
+        <option value="veneers_pmma">Виниры временные (ПММА)</option>
+        <option value="crown_zirconia">Коронки (цирконий)</option>
+        <option value="crown_emax">Коронки (е.мах)</option>
+        <option value="crown_metal">Коронки (металлокерамика)</option>
+        <option value="bridge">Мостовидный протез</option>
+        <option value="implant_crown">Имплант-корона</option>
+        <option value="full_mouth">Полная реставрация</option>
+        <option value="temp">Временные конструкции (ПММА)</option>
+        <option value="cad_mockup">CAD Mock-up / Wax-up</option>
+      </select>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Количество единиц <span class="req">*</span></label>
+        <input class="form-input" id="f-units" type="number" min="1" max="28" placeholder="напр. 6">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Оттенок (Vita / BL)</label>
+        <input class="form-input" id="f-shade" placeholder="напр. A2, BL1, 1M2">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Зубы (номера)</label>
+        <input class="form-input" id="f-teeth" placeholder="напр. 11, 12, 13, 21, 22, 23">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Материал</label>
+        <select class="form-select" id="f-material">
+          <option value="">— Материал —</option>
+          <option>е.мах (IPS e.max)</option>
+          <option>Цирконий (стандарт)</option>
+          <option>Цирконий (Ultra HT)</option>
+          <option>Фельспатовая керамика</option>
+          <option>ПММА (временный)</option>
+          <option>Металлокерамика</option>
+          <option>Диоксид циркония (Katana)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-divider"></div>
+    <div class="form-section-title">Сроки и ответственный</div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Срок выполнения <span class="req">*</span></label>
+        <input class="form-input" id="f-deadline" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ответственный техник</label>
+        <select class="form-select" id="f-tech">
+          <option value="">— Назначить техника —</option>
+          <option value="artem">Артём К.</option>
+          <option value="maria">Мария В.</option>
+          <option value="dmitry">Дмитрий Н.</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Приоритет</label>
+        <select class="form-select" id="f-priority">
+          <option value="normal">Стандартный</option>
+          <option value="urgent">⚡ Срочный</option>
+          <option value="vip">⭐ VIP</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Требует согласования дизайна?</label>
+        <select class="form-select" id="f-approval">
+          <option value="yes">Да — отправить врачу</option>
+          <option value="no">Нет — пропустить этап 6</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-divider"></div>
+    <div class="form-section-title">Техническое задание</div>
+
+    <div class="form-group">
+      <label class="form-label">Комментарии и ТЗ</label>
+      <textarea class="form-textarea" id="f-notes" placeholder="Пожелания по форме, окклюзии, текстуре, цвету, характеристикам окклюзии, особые требования..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Прикрепить файлы</label>
+      <div class="upload-zone" onclick="showToast('Загрузка','STL · DICOM · фото · PDF до 500 МБ — доступно в полной версии')">
+        <span class="upload-icon">📁</span>
+        <div class="upload-text">Перетащите файлы или <span class="upload-link">выберите</span></div>
+        <div class="upload-hint">STL · DICOM · JPG · PNG · PDF · до 500 МБ</div>
+      </div>
+    </div>
+
+    <div class="form-divider"></div>
+    <div class="form-section-title">Уведомления</div>
+
+    <div class="form-group" style="display:flex;flex-direction:column;gap:8px">
+      <label class="checkbox-group">
+        <input type="checkbox" class="form-checkbox" checked>
+        <span class="checkbox-label">Telegram-уведомление врачу при смене статуса</span>
+      </label>
+      <label class="checkbox-group">
+        <input type="checkbox" class="form-checkbox" checked>
+        <span class="checkbox-label">Email-уведомление при готовности к отправке</span>
+      </label>
+      <label class="checkbox-group">
+        <input type="checkbox" class="form-checkbox">
+        <span class="checkbox-label">SMS-уведомление пациенту при получении клиникой</span>
+      </label>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-modal cancel" onclick="closeNewOrderModal()">Отмена</button>
+      <button class="btn-modal primary" onclick="submitNewOrder()">Создать заказ →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast уведомление -->
+<div class="toast" id="toast">
+  <div class="toast-icon" id="toast-icon">✅</div>
+  <div class="toast-text">
+    <div class="toast-title" id="toast-title"></div>
+    <div class="toast-sub"   id="toast-sub"></div>
+  </div>
+</div>
+
+
+<!-- ================================================================
+     JAVASCRIPT
+     ================================================================ -->
+<script>
+/* ── ДАННЫЕ ─────────────────────────────────────────────────────────
+   В продакшн-версии эти данные приходят из Supabase/API.
+   Замените на: const response = await fetch('/api/orders') и т.д.
+   ──────────────────────────────────────────────────────────────────── */
+
+/**
+ * Этапы заказа (14 штук)
+ * @type {Array<{emoji, name, colorClass, desc, subs, approval?, warning?, tracking?}>}
+ */
+const STAGES = [
+  {
+    emoji: '🟢', name: 'Заказ создан', colorClass: 'green',
+    desc: 'Врач оформил заявку онлайн через портал.',
+    subs: ['Загружены фото и сканы', 'Указан оттенок (Vita/BL)', 'Заполнено техническое задание', 'Прикреплены комментарии']
+  },
+  {
+    emoji: '🟢', name: 'Заказ принят лабораторией', colorClass: 'green',
+    desc: 'Менеджер проверил заявку, подтвердил сроки и назначил техника.',
+    subs: ['Заявка проверена менеджером', 'Сроки выполнения подтверждены', 'Назначен ответственный техник']
+  },
+  {
+    emoji: '🟡', name: 'Техническая проверка / анализ кейса', colorClass: 'yellow', warning: true,
+    desc: 'Анализ входных данных перед запуском в производство.',
+    subs: ['Проверка качества и полноты сканов', 'Анализ окклюзии и прикуса', 'Проверка ТЗ и пожеланий', 'Если чего-то не хватает → кнопка «Требуются данные»']
+  },
+  {
+    emoji: '🟡', name: 'Планирование работы', colorClass: 'yellow',
+    desc: 'Выбор протокола изготовления и распределение по специалистам.',
+    subs: ['Определён протокол изготовления', 'Работа распределена по специалистам', 'Внутренние сроки этапов согласованы']
+  },
+  {
+    emoji: '🔵', name: 'Цифровое моделирование (CAD)', colorClass: 'blue',
+    desc: 'Создание 3D-дизайна реставрации в программе CAD.',
+    subs: ['Импорт STL-сканов в программу', 'Создание цифрового дизайна', 'Моделировка виниров / коронок', 'Проверка пропорций, контактов и окклюзии']
+  },
+  {
+    emoji: '🔵', name: 'Согласование дизайна', colorClass: 'blue', approval: true,
+    desc: 'Врач получает 3D-визуализацию для согласования до начала производства.',
+    subs: []
+  },
+  {
+    emoji: '🔵', name: 'Производство / изготовление', colorClass: 'blue',
+    desc: 'Изготовление реставрации по утверждённому цифровому дизайну.',
+    subs: ['Печать (3D-принтер)', 'Фрезеровка (CAM / 5-осевой фрезер)', 'Прессование (е.мах / пресс-керамика)', 'Нанесение керамических масс', 'Обжиг в печи']
+  },
+  {
+    emoji: '🟠', name: 'Индивидуальная работа техника', colorClass: 'orange',
+    desc: 'Финишная ручная персонализация изделия старшим техником.',
+    subs: ['Окрашивание (эффекты, характеристики)', 'Текстурирование поверхности', 'Персонализация под пациента', 'Финальный обжиг / полировка']
+  },
+  {
+    emoji: '🟠', name: 'Контроль качества OWNLAB', colorClass: 'orange',
+    desc: 'Финальная проверка по стандартам качества OWN Digital Laboratory.',
+    subs: ['Проверка посадки на модели', 'Проверка апроксимальных контактов', 'Контроль окклюзионных контактов', 'Эстетический контроль (цвет, текстура, прозрачность)', 'Проверка соответствия ТЗ']
+  },
+  {
+    emoji: '🟠', name: 'Работа готова', colorClass: 'orange',
+    desc: 'Реставрация полностью готова и прошла контроль качества.',
+    subs: ['Фотофиксация готовой работы', 'Упаковка в боксы с маркировкой']
+  },
+  {
+    emoji: '🚚', name: 'Передана в доставку', colorClass: 'delivery',
+    desc: 'Изделие профессионально упаковано и передано в службу доставки.',
+    subs: ['Профессиональная упаковка с защитой', 'Оформлены сопроводительные документы', 'Передано в курьерскую службу']
+  },
+  {
+    emoji: '🚚', name: 'В пути', colorClass: 'delivery', tracking: true,
+    desc: 'Курьер доставляет работу в клинику. Трек-номер отправлен врачу.',
+    subs: []
+  },
+  {
+    emoji: '✅', name: 'Получена клиникой', colorClass: 'done',
+    desc: 'Врач подтвердил получение посылки.',
+    subs: ['Врач подтвердил получение', 'Проверка целостности упаковки']
+  },
+  {
+    emoji: '⭐', name: 'Заказ завершён', colorClass: 'done',
+    desc: 'Работа принята, пациент доволен. Запрошен отзыв о сотрудничестве.',
+    subs: ['Отзыв врача получен', 'Архив заказа сформирован']
+  }
+];
+
+/**
+ * Тестовые заказы
+ * В продакшн: заменить на загрузку из API
+ */
+const ORDERS_DATA = [
+  {
+    id: 'o1',
+    orderNum: '#OWN-0051',
+    patient: 'Сергеев А.В.',
+    clinic: 'Клиника Иванова И.И.',
+    doctor: 'Иванов И.И.',
+    workType: '10 виниров / е.мах',
+    units: 10,
+    shade: 'BL1',
+    material: 'IPS e.max',
+    teeth: '13, 12, 11, 21, 22, 23, 33, 32, 31, 41',
+    deadline: '24.05.2025',
+    tech: 'Артём К.',
+    techKey: 'Артём',
+    colorClass: 'blue',
+    activeStage: 5,
+    progress: 43,
+    urgent: true,
+    approvalStatus: 'waiting',
+    statusLabel: 'CAD-моделирование',
+    files: [
+      { name: 'scan_upper.stl', icon: '🦷' },
+      { name: 'scan_lower.stl', icon: '🦷' },
+      { name: 'photo_pre.jpg', icon: '📸' },
+      { name: 'tz_client.pdf', icon: '📄' },
+    ],
+    comments: [
+      { author: 'Иван Ж.', role: 'admin', avClass: 'admin', initials: 'ИЖ', text: 'Очень важный пациент, прошу максимальное внимание к эстетике. Ориентир — BL1, без синевы.', time: '09:14' },
+      { author: 'Артём К.', role: 'Техник', avClass: 'tech', initials: 'АК', text: 'Принял в работу, сканы хорошие. Приступаю к CAD-моделированию.', time: '10:32' },
+      { author: 'Иван Ж.', role: 'admin', avClass: 'admin', initials: 'ИЖ', text: 'Отлично. После CAD — обязательно согласование с врачом перед производством.', time: '10:45' },
+    ]
+  },
+  {
+    id: 'o2',
+    orderNum: '#OWN-0052',
+    patient: 'Ким Н.В.',
+    clinic: 'Дент Плюс',
+    doctor: 'Петренко А.А.',
+    workType: '4 коронки / цирконий',
+    units: 4,
+    shade: 'A2',
+    material: 'Цирконий Ultra HT',
+    teeth: '15, 14, 24, 25',
+    deadline: '29.05.2025',
+    tech: 'Мария В.',
+    techKey: 'Мария',
+    colorClass: 'green',
+    activeStage: 2,
+    progress: 14,
+    urgent: false,
+    statusLabel: 'Принят лабораторией',
+    files: [
+      { name: 'scans.stl', icon: '🦷' },
+      { name: 'foto_before.jpg', icon: '📸' },
+    ],
+    comments: [
+      { author: 'Мария В.', role: 'Техник', avClass: 'tech', initials: 'МВ', text: 'Заказ принят. Сканы проверила — качество отличное. Приступаю к анализу кейса.', time: '11:00' },
+    ]
+  },
+  {
+    id: 'o3',
+    orderNum: '#OWN-0053',
+    patient: 'Орлова М.С.',
+    clinic: 'Стомасервис',
+    doctor: 'Захаров П.В.',
+    workType: 'Мостовидный протез',
+    units: 3,
+    shade: 'A3',
+    material: 'е.мах (IPS e.max)',
+    teeth: '45, 46, 47',
+    deadline: '31.05.2025',
+    tech: 'Дмитрий Н.',
+    techKey: 'Дмитрий',
+    colorClass: 'yellow',
+    activeStage: 3,
+    progress: 21,
+    urgent: false,
+    needsData: true,
+    statusLabel: '⚠️ Требуются данные',
+    files: [
+      { name: 'scan_jaw.stl', icon: '🦷' },
+    ],
+    comments: [
+      { author: 'Дмитрий Н.', role: 'Техник', avClass: 'tech', initials: 'ДН', text: '⚠️ Скан нижней челюсти неполный — нет 47 зуба. Прошу прислать повторный скан или слепок.', time: '13:20' },
+    ]
+  },
+  {
+    id: 'o4',
+    orderNum: '#OWN-0049',
+    patient: 'Волков Д.А.',
+    clinic: 'Клиника Иванова И.И.',
+    doctor: 'Иванов И.И.',
+    workType: '6 виниров / е.мах',
+    units: 6,
+    shade: 'BL2',
+    material: 'IPS e.max',
+    teeth: '13, 12, 11, 21, 22, 23',
+    deadline: '22.05.2025',
+    tech: 'Артём К.',
+    techKey: 'Артём',
+    colorClass: 'orange',
+    activeStage: 9,
+    progress: 86,
+    urgent: true,
+    statusLabel: 'Контроль качества OWNLAB',
+    files: [
+      { name: 'scan_upper.stl', icon: '🦷' },
+      { name: 'cad_design.3dm', icon: '💻' },
+      { name: 'photo_cad.jpg', icon: '📸' },
+      { name: 'photo_ready.jpg', icon: '📸' },
+    ],
+    comments: [
+      { author: 'Артём К.', role: 'Техник', avClass: 'tech', initials: 'АК', text: 'Виниры изготовлены. Цвет попали точно в BL2. Сейчас на финальной проверке у ОТК.', time: '08:10' },
+      { author: 'Иван Ж.', role: 'admin', avClass: 'admin', initials: 'ИЖ', text: 'Проверил — отлично! После QC сразу в доставку. Срочно!', time: '09:30' },
+    ]
+  },
+  {
+    id: 'o5',
+    orderNum: '#OWN-0048',
+    patient: 'Петрова Е.И.',
+    clinic: 'Дент Плюс',
+    doctor: 'Петренко А.А.',
+    workType: 'Полная реставрация / 12 ед.',
+    units: 12,
+    shade: 'A1',
+    material: 'Цирконий + е.мах',
+    teeth: '17-27 (верхняя челюсть)',
+    deadline: '21.05.2025',
+    tech: 'Мария В.',
+    techKey: 'Мария',
+    colorClass: 'delivery',
+    activeStage: 12,
+    progress: 92,
+    urgent: false,
+    trackingNum: 'СДЭК-847362819',
+    trackingStatus: 'В пути · ожидается сегодня до 18:00',
+    statusLabel: '🚚 В пути · СДЭК',
+    files: [
+      { name: 'scan_full.stl', icon: '🦷' },
+      { name: 'cad_upper.3dm', icon: '💻' },
+      { name: 'approved_design.jpg', icon: '📸' },
+      { name: 'photo_final_1.jpg', icon: '📸' },
+      { name: 'photo_final_2.jpg', icon: '📸' },
+      { name: 'invoice.pdf', icon: '📄' },
+    ],
+    comments: [
+      { author: 'Мария В.', role: 'Техник', avClass: 'tech', initials: 'МВ', text: 'Работа передана в СДЭК. Трек: СДЭК-847362819. Доставка сегодня.', time: '07:45' },
+      { author: 'Иван Ж.', role: 'admin', avClass: 'admin', initials: 'ИЖ', text: 'Уведомление врачу отправлено. Как получат — попросить оставить отзыв.', time: '08:00' },
+    ]
+  },
+  {
+    id: 'o6',
+    orderNum: '#OWN-0054',
+    patient: 'Беляев К.О.',
+    clinic: 'Смайл Клиник',
+    doctor: 'Горина С.В.',
+    workType: 'Имплант-корона / цирконий',
+    units: 1,
+    shade: 'A3.5',
+    material: 'Цирконий (Katana UTML)',
+    teeth: '36',
+    deadline: '05.06.2025',
+    tech: 'Дмитрий Н.',
+    techKey: 'Дмитрий',
+    colorClass: 'green',
+    activeStage: 1,
+    progress: 7,
+    urgent: false,
+    statusLabel: 'Заказ создан',
+    files: [
+      { name: 'scan_36.stl', icon: '🦷' },
+      { name: 'xray.jpg', icon: '📸' },
+    ],
+    comments: []
+  }
+];
+
+/* ── СОСТОЯНИЕ ПРИЛОЖЕНИЯ ─────────────────────────────────────────── */
+let currentOrderId   = null;
+let currentFilter    = 'all';
+let currentTechFilter = 'all';
+let currentSearchQuery = '';
+let activeTab        = 'info';
+
+/* ── РЕНДЕР СПИСКА ЗАКАЗОВ ─────────────────────────────────────────── */
+function renderOrdersList() {
+  const container = document.getElementById('ordersList');
+  const filtered  = getFilteredOrders();
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">📭</div>
+        <div class="empty-state-text">Заказы не найдены</div>
+        <div class="empty-state-sub">Измените фильтр или создайте новый заказ</div>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(o => `
+    <div class="order-card c-${o.colorClass} ${o.id === currentOrderId ? 'is-selected' : ''} ${o.urgent ? 'is-urgent' : ''}"
+         onclick="openDetail('${o.id}')"
+         data-id="${o.id}"
+    >
+      <div class="card-top">
+        <span class="card-id">${o.orderNum}</span>
+        <span class="card-patient">${o.patient}</span>
+        <span class="card-type">${o.workType}</span>
+        <span class="card-deadline ${o.urgent ? 'urgent' : ''}">${o.urgent ? '⚡ ' : ''}до ${o.deadline}</span>
+      </div>
+      <div class="card-bottom">
+        <span class="card-clinic">🏥 ${o.clinic} · ${o.tech}</span>
+        <span class="status-badge c-${o.colorClass}">${STAGES[o.activeStage - 1].emoji} ${o.statusLabel}</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width:${o.progress}%"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function getFilteredOrders() {
+  return ORDERS_DATA.filter(o => {
+    const matchFilter = currentFilter === 'all' || o.colorClass === currentFilter;
+    const matchTech   = currentTechFilter === 'all' || o.techKey === currentTechFilter;
+    const q = currentSearchQuery.toLowerCase();
+    const matchSearch = !q || (
+      o.patient.toLowerCase().includes(q) ||
+      o.clinic.toLowerCase().includes(q)  ||
+      o.orderNum.toLowerCase().includes(q)||
+      o.workType.toLowerCase().includes(q)
+    );
+    return matchFilter && matchTech && matchSearch;
+  });
+}
+
+/* ── ОТКРЫТИЕ ДЕТАЛЬНОЙ ПАНЕЛИ ─────────────────────────────────────── */
+function openDetail(id) {
+  const o = ORDERS_DATA.find(x => x.id === id);
+  if (!o) return;
+
+  currentOrderId = id;
+
+  // Подсветка карточки
+  document.querySelectorAll('.order-card').forEach(el => {
+    el.classList.toggle('is-selected', el.dataset.id === id);
+  });
+
+  // Хедер
+  document.getElementById('dp-title').textContent = o.patient;
+  document.getElementById('dp-subtitle').textContent = `${o.orderNum} · ${o.clinic}`;
+  document.getElementById('dp-meta').innerHTML = [
+    `<span class="meta-tag">🦷 ${o.workType}</span>`,
+    `<span class="meta-tag">🏥 ${o.clinic}</span>`,
+    `<span class="meta-tag">👤 ${o.tech}</span>`,
+    `<span class="meta-tag status-badge c-${o.colorClass}">${STAGES[o.activeStage-1].emoji} ${o.statusLabel}</span>`,
+  ].join('');
+
+  // Контент вкладок
+  renderInfoTab(o);
+  renderTimeline(o);
+  renderFiles(o);
+  renderComments(o);
+
+  // Переключиться на первую вкладку при открытии
+  switchTab('info', document.querySelector('.detail-tab'));
+
+  document.getElementById('detailPanel').classList.add('open');
+}
+
+function closeDetail() {
+  currentOrderId = null;
+  document.querySelectorAll('.order-card').forEach(el => el.classList.remove('is-selected'));
+  document.getElementById('detailPanel').classList.remove('open');
+}
+
+/* ── ТАБ: ИНФОРМАЦИЯ ─────────────────────────────────────────────── */
+function renderInfoTab(o) {
+  document.getElementById('dp-info-rows').innerHTML = [
+    ['Номер заказа', o.orderNum, 'orange'],
+    ['Пациент', o.patient],
+    ['Клиника', o.clinic],
+    ['Врач', o.doctor],
+    ['Тип работы', o.workType],
+    ['Количество единиц', o.units + ' ед.'],
+    ['Зубы', o.teeth],
+    ['Материал', o.material],
+    ['Оттенок', o.shade],
+    ['Срок выполнения', '📅 ' + o.deadline, o.urgent ? 'red' : 'orange'],
+  ].map(([k, v, cls]) => `
+    <div class="info-row">
+      <span class="ik">${k}</span>
+      <span class="iv ${cls || ''}">${v}</span>
+    </div>
+  `).join('');
+
+  document.getElementById('dp-stage-label').textContent = `Этап ${o.activeStage} из 14: ${STAGES[o.activeStage-1].name}`;
+  document.getElementById('dp-progress-pct').textContent = o.progress + '%';
+  document.getElementById('dp-progress-fill').style.width = o.progress + '%';
+
+  document.getElementById('dp-team').innerHTML = `
+    <div class="info-row">
+      <span class="ik">Техник</span>
+      <span class="iv">${o.tech}</span>
+    </div>
+    <div class="info-row">
+      <span class="ik">Менеджер</span>
+      <span class="iv">Ольга Д.</span>
+    </div>
+    <div class="info-row">
+      <span class="ik">Контроль качества</span>
+      <span class="iv">Иван Ж.</span>
+    </div>
+  `;
+}
+
+/* ── ТАБ: ТАЙМЛАЙН ────────────────────────────────────────────────── */
+function renderTimeline(o) {
+  const tl = document.getElementById('dp-timeline');
+  const daysAgo = (n) => {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return d.toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit' });
+  };
+
+  let html = '';
+  STAGES.forEach((stage, idx) => {
+    const stageNum  = idx + 1;
+    const isLast    = idx === STAGES.length - 1;
+    const isDone    = stageNum < o.activeStage;
+    const isActive  = stageNum === o.activeStage;
+    const isPending = stageNum > o.activeStage;
+    const isWarning = isActive && o.needsData && stage.warning;
+
+    const dotClass  = isWarning ? 's-warning' : isDone ? 's-done' : isActive ? 's-active' : 's-pending';
+    const nameClass = isWarning ? 's-warning' : isDone ? 's-done' : isActive ? 's-active' : 's-pending';
+    const connClass = isDone ? 's-done' : isActive ? 's-active' : 's-pending';
+    const dotEmoji  = isDone ? '✓' : stage.emoji;
+    const dotSize   = isDone ? '13px' : '11px';
+
+    // Метка времени
+    let timestamp = '';
+    if (isDone)   timestamp = `<span class="tl-timestamp">${daysAgo(o.activeStage - stageNum)}</span>`;
+    if (isActive) timestamp = `<span class="tl-timestamp active">сейчас</span>`;
+
+    // Активный бейдж
+    const activeBadge = isActive
+      ? `<div class="active-badge"><div class="active-badge-dot"></div>АКТИВНЫЙ</div>`
+      : '';
+
+    // Подпункты (только для выполненных и активного)
+    let subsHtml = '';
+    if (stage.subs.length && !isPending) {
+      subsHtml = `<div class="tl-subs">` + stage.subs.map(s => {
+        const subDone = isDone || (isActive && Math.random() > 0.5);
+        return `<div class="tl-sub-item ${subDone ? 'done' : ''}">
+          <span class="sub-check">${subDone ? '✓' : ''}</span>
+          ${s}
+        </div>`;
+      }).join('') + `</div>`;
+    }
+
+    // Блок действий для активного этапа
+    let actionsHtml = '';
+    if (isActive) {
+      if (isWarning) {
+        // Этап 3: требуются данные
+        actionsHtml = `
+          <div class="tl-actions">
+            <button class="tl-btn warning" onclick="handleAction('needsData','${o.id}')">⚠️ Требуются данные</button>
+            <button class="tl-btn secondary" onclick="switchTab('comments', document.querySelectorAll('.detail-tab')[3])">
+              ✉️ Написать врачу
+            </button>
+          </div>`;
+      } else if (stage.approval) {
+        // Этап 6: согласование дизайна
+        actionsHtml = `
+          <div class="approval-block">
+            <div class="approval-status waiting">⏳ Ожидает согласования врача</div>
+            <div style="font-size:10px;color:var(--gray-400);margin-bottom:10px">
+              3D-визуализация отправлена на email и в Telegram врача ${o.doctor}
+            </div>
+            <div class="tl-actions">
+              <button class="tl-btn success" onclick="handleAction('approved','${o.id}')">✅ Согласовано</button>
+              <button class="tl-btn danger"  onclick="handleAction('revision','${o.id}')">🔄 На доработку</button>
+              <button class="tl-btn secondary" onclick="handleAction('resend','${o.id}')">📩 Отправить повторно</button>
+            </div>
+          </div>`;
+      } else if (stage.tracking) {
+        // Этап 12: в пути
+        actionsHtml = `
+          <div class="tracking-block">
+            <div style="font-size:10px;color:var(--gray-300)">Трек-номер:</div>
+            <div class="tracking-code">${o.trackingNum || 'СДЭК-000000000'}</div>
+            <div class="tracking-status">${o.trackingStatus || 'Информация обновляется'}</div>
+          </div>
+          <div class="tl-actions" style="margin-top:10px">
+            <button class="tl-btn success" onclick="handleAction('received','${o.id}')">✅ Клиника получила</button>
+            <button class="tl-btn purple"  onclick="handleAction('tracking','${o.id}')">🔍 Отследить посылку</button>
+          </div>`;
+      } else {
+        // Стандартный активный этап
+        actionsHtml = `
+          <div class="tl-actions">
+            <button class="tl-btn primary"    onclick="handleAction('next','${o.id}')">Следующий этап →</button>
+            <button class="tl-btn secondary"  onclick="handleAction('photo','${o.id}')">📸 Добавить фото</button>
+            <button class="tl-btn secondary"  onclick="switchTab('comments', document.querySelectorAll('.detail-tab')[3])">💬 Комментарий</button>
+          </div>`;
+      }
+    }
+
+    // Описание (только для выполненных и активного)
+    const descHtml = !isPending
+      ? `<div class="tl-desc ${isActive ? 'active' : ''}">${stage.desc}</div>`
+      : '';
+
+    html += `
+      <div class="tl-item">
+        <div class="tl-left">
+          <div class="tl-dot ${dotClass}" style="font-size:${dotSize}">${dotEmoji}</div>
+          ${!isLast ? `<div class="tl-connector ${connClass}"></div>` : ''}
+        </div>
+        <div class="tl-content">
+          <div class="tl-stage-row">
+            <div class="tl-stage-name ${nameClass}">${stage.name}</div>
+            ${activeBadge}
+            ${timestamp}
+          </div>
+          ${descHtml}
+          ${subsHtml}
+          ${actionsHtml}
+        </div>
+      </div>
+    `;
+  });
+
+  tl.innerHTML = html;
+
+  // Автоскролл к активному этапу
+  setTimeout(() => {
+    const activeBadge = tl.querySelector('.active-badge');
+    if (activeBadge) {
+      activeBadge.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, 150);
+}
+
+/* ── ТАБ: ФАЙЛЫ ─────────────────────────────────────────────────── */
+function renderFiles(o) {
+  const icons = { stl: '🦷', '3dm': '💻', jpg: '📸', png: '📸', pdf: '📄', dicom: '🏥' };
+  document.getElementById('dp-files').innerHTML = (o.files || []).map(f => {
+    const ext = f.name.split('.').pop().toLowerCase();
+    const icon = icons[ext] || f.icon || '📎';
+    return `
+      <div class="file-item" onclick="showToast('${f.name}','Открытие файла — в полной версии')">
+        <span class="file-icon">${icon}</span>
+        <div class="file-name">${f.name}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+/* ── ТАБ: КОММЕНТАРИИ ────────────────────────────────────────────── */
+function renderComments(o) {
+  const container = document.getElementById('dp-comments');
+  if (!o.comments || !o.comments.length) {
+    container.innerHTML = `<div class="empty-state" style="padding:30px">
+      <div class="empty-state-icon">💬</div>
+      <div class="empty-state-text">Комментариев пока нет</div>
+      <div class="empty-state-sub">Напишите первый</div>
+    </div>`;
+    return;
+  }
+  container.innerHTML = o.comments.map(c => `
+    <div class="comment-item">
+      <div class="comment-avatar ${c.avClass}">${c.initials}</div>
+      <div class="comment-bubble">
+        <div class="comment-meta">
+          <span class="comment-author">${c.author}</span>
+          <span class="comment-role">${c.role}</span>
+          <span class="comment-time">${c.time}</span>
+        </div>
+        <div class="comment-text">${c.text}</div>
+      </div>
+    </div>
+  `).join('');
+  container.scrollTop = container.scrollHeight;
+}
+
+function sendComment() {
+  const input = document.getElementById('commentInput');
+  const text  = input.value.trim();
+  if (!text || !currentOrderId) return;
+
+  const o = ORDERS_DATA.find(x => x.id === currentOrderId);
+  if (!o) return;
+
+  o.comments.push({
+    author: 'Иван Ж.', role: 'admin', avClass: 'admin', initials: 'ИЖ',
+    text,
+    time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  });
+
+  input.value = '';
+  renderComments(o);
+  showToast('Сообщение отправлено', 'Уведомление отправлено технику');
+}
+
+/* ── ПЕРЕКЛЮЧЕНИЕ ТАБОВ ───────────────────────────────────────────── */
+function switchTab(tabId, clickedEl) {
+  // Хайлайт кнопок
+  document.querySelectorAll('.detail-tab').forEach((btn, i) => {
+    const tabs = ['info', 'timeline', 'files', 'comments'];
+    btn.classList.toggle('active', tabs[i] === tabId);
+  });
+  // Показать нужный контент
+  ['info', 'timeline', 'files', 'comments'].forEach(t => {
+    const el = document.getElementById('tab-' + t);
+    if (el) el.style.display = t === tabId ? '' : 'none';
+  });
+  activeTab = tabId;
+}
+
+/* ── ДЕЙСТВИЯ В ТАЙМЛАЙНЕ ────────────────────────────────────────── */
+function handleAction(action, orderId) {
+  const o = ORDERS_DATA.find(x => x.id === orderId);
+  if (!o) return;
+
+  const actions = {
+    next: () => {
+      if (o.activeStage < 14) {
+        o.activeStage++;
+        o.progress = Math.min(100, Math.round((o.activeStage / 14) * 100));
+        o.statusLabel = STAGES[o.activeStage - 1].name;
+        o.colorClass  = STAGES[o.activeStage - 1].colorClass;
+        renderTimeline(o);
+        renderInfoTab(o);
+        renderOrdersList();
+        showToast('Этап обновлён', `Перешли к этапу ${o.activeStage}: ${STAGES[o.activeStage-1].name}`);
+      }
+    },
+    needsData: () => showToast('Запрос данных', 'Уведомление отправлено врачу ' + o.doctor, 'warning'),
+    approved:  () => {
+      showToast('Дизайн согласован ✅', 'Запускаем производство');
+      setTimeout(() => handleAction('next', orderId), 500);
+    },
+    revision:  () => showToast('Отправлено на доработку 🔄', 'Техник получил уведомление', 'warning'),
+    resend:    () => showToast('Визуализация отправлена повторно 📩', 'Отправлено на email: ' + o.doctor),
+    received:  () => {
+      showToast('Получена клиникой ✅', 'Заказ переходит в завершение');
+      setTimeout(() => handleAction('next', orderId), 500);
+    },
+    tracking:  () => showToast('Трекинг', 'СДЭК: ' + (o.trackingNum || '—')),
+    photo:     () => showToast('Добавить фото', 'Загрузка файлов — в полной версии'),
+  };
+
+  if (actions[action]) actions[action]();
+}
+
+/* ── ФИЛЬТРЫ ─────────────────────────────────────────────────────── */
+function applyFilter(filter, el) {
+  currentFilter = filter;
+  document.querySelectorAll('.nav-item[data-filter]').forEach(i => i.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderOrdersList();
+}
+
+function applyTechFilter(tech, el) {
+  currentTechFilter = tech;
+  document.querySelectorAll('.nav-item[data-tech]').forEach(i => i.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderOrdersList();
+}
+
+function searchOrders(query) {
+  currentSearchQuery = query;
+  renderOrdersList();
+}
+
+/* ── МОДАЛЬНОЕ ОКНО НОВОГО ЗАКАЗА ────────────────────────────────── */
+function openNewOrderModal() {
+  document.getElementById('modalOverlay').classList.add('open');
+  // Минимальная дата = сегодня
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('f-deadline').min = today;
+}
+
+function closeNewOrderModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+}
+
+function onOverlayClick(e) {
+  if (e.target === document.getElementById('modalOverlay')) {
+    closeNewOrderModal();
+  }
+}
+
+function submitNewOrder() {
+  // Валидация обязательных полей
+  const required = [
+    { id: 'f-patient',  label: 'Пациент' },
+    { id: 'f-clinic',   label: 'Клиника' },
+    { id: 'f-type',     label: 'Тип работы' },
+    { id: 'f-units',    label: 'Количество единиц' },
+    { id: 'f-deadline', label: 'Срок выполнения' },
+  ];
+  for (const field of required) {
+    const val = document.getElementById(field.id).value.trim();
+    if (!val) {
+      showToast('Заполните поле', field.label + ' — обязательное поле', 'error');
+      document.getElementById(field.id).focus();
+      return;
+    }
+  }
+
+  const patient  = document.getElementById('f-patient').value.trim();
+  const clinic   = document.getElementById('f-clinic').value.trim();
+  const doctor   = document.getElementById('f-doctor').value.trim() || '—';
+  const workType = document.getElementById('f-type').options[document.getElementById('f-type').selectedIndex].text;
+  const units    = parseInt(document.getElementById('f-units').value);
+  const shade    = document.getElementById('f-shade').value.trim() || '—';
+  const teeth    = document.getElementById('f-teeth').value.trim() || '—';
+  const material = document.getElementById('f-material').value || '—';
+  const deadline = document.getElementById('f-deadline').value;
+  const techSel  = document.getElementById('f-tech');
+  const tech     = techSel.value ? techSel.options[techSel.selectedIndex].text : '—';
+  const techKey  = tech.split(' ')[0];
+
+  const newNum = '#OWN-0' + (55 + ORDERS_DATA.length);
+  const dl = new Date(deadline);
+  const dlStr = dl.toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric' });
+
+  const newOrder = {
+    id: 'o' + Date.now(),
+    orderNum: newNum,
+    patient, clinic, doctor, workType, units, shade, teeth, material,
+    deadline: dlStr,
+    tech, techKey,
+    colorClass: 'green',
+    activeStage: 1,
+    progress: 4,
+    urgent: document.getElementById('f-priority').value === 'urgent',
+    statusLabel: 'Заказ создан',
+    files: [],
+    comments: []
+  };
+
+  ORDERS_DATA.unshift(newOrder);
+  renderOrdersList();
+  closeNewOrderModal();
+
+  showToast(
+    '✅ Заказ создан · ' + newNum,
+    'Уведомление отправлено технику и врачу'
+  );
+}
+
+/* ── TOAST УВЕДОМЛЕНИЯ ───────────────────────────────────────────── */
+let toastTimer = null;
+function showToast(title, sub = '', type = 'success') {
+  const toast = document.getElementById('toast');
+  const icons = { success: '✅', error: '❌', warning: '⚠️' };
+  document.getElementById('toast-icon').textContent  = icons[type] || '✅';
+  document.getElementById('toast-title').textContent = title;
+  document.getElementById('toast-sub').textContent   = sub;
+  toast.className = 'toast ' + type;
+
+  clearTimeout(toastTimer);
+  // Маленькая задержка чтобы перезапустить анимацию
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      toast.classList.add('visible');
+    });
+  });
+  toastTimer = setTimeout(() => toast.classList.remove('visible'), 3500);
+}
+
+/* ── ГОРЯЧИЕ КЛАВИШИ ─────────────────────────────────────────────── */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeDetail();
+    closeNewOrderModal();
+  }
+});
+
+/* ── ИНИЦИАЛИЗАЦИЯ ───────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  renderOrdersList();
+  // Открыть первый заказ по умолчанию для демонстрации
+  openDetail('o1');
+  switchTab('timeline', null);
+  // Переключить таб timeline кнопкой
+  const tabs = document.querySelectorAll('.detail-tab');
+  tabs.forEach((btn, i) => {
+    if (i === 1) btn.classList.add('active');
+    else btn.classList.remove('active');
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,271 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);background:transparent}
+.wrap{padding:1rem 0}
+.top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;gap:12px;flex-wrap:wrap}
+.search-box{flex:1;min-width:160px;max-width:260px;height:36px;padding:0 12px;border:0.5px solid var(--border-strong);border-radius:var(--radius);font-size:14px;background:var(--surface-2);color:var(--text-primary)}
+.filter-row{display:flex;gap:6px;flex-wrap:wrap}
+.filter-btn{padding:4px 12px;border-radius:20px;font-size:12px;border:0.5px solid var(--border-strong);cursor:pointer;background:var(--surface-1);color:var(--text-secondary);transition:all .15s}
+.filter-btn.active{background:var(--fill-accent);color:var(--on-accent);border-color:var(--fill-accent)}
+.add-btn{padding:0 16px;height:36px;border-radius:var(--radius);background:var(--fill-accent);color:var(--on-accent);border:none;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.add-btn:hover{background:var(--fill-accent-hover)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:1rem}
+.stat{background:var(--surface-1);border-radius:var(--radius);padding:.75rem 1rem}
+.stat-n{font-size:22px;font-weight:500;color:var(--text-primary)}
+.stat-l{font-size:11px;color:var(--text-muted);margin-top:2px}
+.tbl-wrap{overflow-x:auto;border:0.5px solid var(--border);border-radius:12px}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:720px}
+th{background:var(--surface-1);padding:8px 10px;text-align:left;color:var(--text-secondary);font-weight:500;font-size:12px;border-bottom:0.5px solid var(--border);white-space:nowrap}
+td{padding:8px 10px;border-bottom:0.5px solid var(--border);color:var(--text-primary);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--surface-1)}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap;cursor:pointer;border:none;transition:opacity .15s}
+.badge:hover{opacity:.85}
+.s0{background:#E6F1FB;color:#185FA5}
+.s1{background:#FAEEDA;color:#854F0B}
+.s2{background:#E1F5EE;color:#0F6E56}
+.s3{background:#EAF3DE;color:#3B6D11}
+.s4{background:#FCEBEB;color:#A32D2D}
+.s5{background:#F1EFE8;color:#5F5E5A}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.act{display:flex;gap:4px}
+.ico-btn{width:26px;height:26px;border-radius:6px;border:0.5px solid var(--border-strong);background:var(--surface-2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text-secondary)}
+.ico-btn:hover{background:var(--surface-1);color:var(--text-primary)}
+.comment-cell{max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-secondary);font-size:12px}
+.overdue{color:#A32D2D!important;font-weight:500}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:#f9f8f6;border-radius:14px;padding:1.5rem;width:min(520px,95vw);max-height:90vh;overflow-y:auto;border:1px solid #dddbd5;box-shadow:0 8px 32px rgba(0,0,0,.18),0 2px 8px rgba(0,0,0,.10)}
+@media(prefers-color-scheme:dark){.modal{background:#2c2c2a;border-color:#444441}}
+.modal h3{font-size:16px;font-weight:500;margin-bottom:1rem;color:var(--text-primary)}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form-grid .full{grid-column:1/-1}
+label{font-size:12px;color:var(--text-secondary);display:block;margin-bottom:3px}
+input,select,textarea{width:100%;height:34px;padding:0 10px;border:0.5px solid var(--border-strong);border-radius:var(--radius);font-size:13px;background:#fff;color:var(--text-primary)}
+@media(prefers-color-scheme:dark){input,select,textarea{background:#3a3a38}}
+textarea{height:64px;padding:8px 10px;resize:none}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem}
+.btn-cancel{padding:0 14px;height:34px;border-radius:var(--radius);border:0.5px solid var(--border-strong);background:transparent;color:var(--text-secondary);font-size:13px;cursor:pointer}
+.btn-save{padding:0 14px;height:34px;border-radius:var(--radius);border:none;background:var(--fill-accent);color:var(--on-accent);font-size:13px;cursor:pointer;font-weight:500}
+.status-menu{position:absolute;background:#f9f8f6;border:1px solid #dddbd5;border-radius:var(--radius);z-index:200;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.14)}
+@media(prefers-color-scheme:dark){.status-menu{background:#2c2c2a;border-color:#444441}}
+.status-opt{display:flex;align-items:center;gap:8px;padding:7px 14px;cursor:pointer;font-size:12px;white-space:nowrap}
+.status-opt:hover{background:var(--surface-1)}
+</style>
+
+<div class="wrap">
+  <h2 class="sr-only">Трекер лабораторных работ стоматологической клиники</h2>
+  <div class="stats" id="statsRow"></div>
+  <div class="top-bar">
+    <input class="search-box" type="search" placeholder="Поиск пациента..." id="searchInput" oninput="render()">
+    <div class="filter-row" id="filterRow"></div>
+    <button class="add-btn" onclick="openModal()"><i class="ti ti-plus" aria-hidden="true"></i> Добавить</button>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Пациент</th><th>Врач</th><th>Вид работы</th><th>Лаборатория</th><th>Отправлено</th><th>Срок</th><th>Статус</th><th>Комментарий</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalBg" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h3 id="modalTitle">Новая лабораторная работа</h3>
+    <div class="form-grid">
+      <div class="full"><label>ФИО пациента</label><input id="f_patient" placeholder="Иванов Иван Иванович"></div>
+      <div><label>Врач</label><input id="f_doctor" placeholder="Жегало И.И."></div>
+      <div><label>Вид работы</label>
+        <select id="f_type">
+          <option>Коронка металлокерамика</option>
+          <option>Коронка цирконий</option>
+          <option>Виниры (E.max)</option>
+          <option>Мост (3 единицы)</option>
+          <option>Мост (4+ единицы)</option>
+          <option>Съёмный протез</option>
+          <option>Временные коронки</option>
+          <option>Каппа / элайнер</option>
+          <option>Вкладка / накладка</option>
+          <option>Другое</option>
+        </select>
+      </div>
+      <div><label>Лаборатория</label><input id="f_lab" placeholder="OWNLAB"></div>
+      <div><label>Дата отправки</label><input type="date" id="f_sent"></div>
+      <div><label>Срок готовности</label><input type="date" id="f_due"></div>
+      <div class="full"><label>Статус</label>
+        <select id="f_status">
+          <option value="0">🔵 Отправлено в лабораторию</option>
+          <option value="1">🟡 В работе</option>
+          <option value="2">🟠 Готово — ожидает примерки</option>
+          <option value="3">🟢 Сдано пациенту</option>
+          <option value="4">🔴 Задержка</option>
+          <option value="5">⚫ Отменено</option>
+        </select>
+      </div>
+      <div class="full"><label>Комментарий</label><textarea id="f_comment" placeholder="Цвет A2, особые пожелания..."></textarea></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Отмена</button>
+      <button class="btn-save" onclick="saveRecord()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div class="status-menu" id="statusMenu" style="display:none"></div>
+
+<script>
+const STATUSES=[
+  {label:'Отправлено',cls:'s0'},
+  {label:'В работе',cls:'s1'},
+  {label:'На примерке',cls:'s2'},
+  {label:'Сдано',cls:'s3'},
+  {label:'Задержка',cls:'s4'},
+  {label:'Отменено',cls:'s5'}
+];
+const FILTERS=['Все','Отправлено','В работе','На примерке','Сдано','Задержка','Отменено'];
+let activeFilter=0;
+let editId=null;
+let records=[
+  {id:1,patient:'Петрова Анна Сергеевна',doctor:'Жегало И.И.',type:'Виниры (E.max)',lab:'OWNLAB',sent:'2026-07-10',due:'2026-07-20',status:1,comment:'16 ед., цвет BL2, контролировать прозрачность'},
+  {id:2,patient:'Морозов Дмитрий Иванович',doctor:'Жегало И.И.',type:'Коронка цирконий',lab:'OWNLAB',sent:'2026-07-08',due:'2026-07-15',status:4,comment:'Задержка на 3 дня — нет материала'},
+  {id:3,patient:'Соколова Мария Петровна',doctor:'Иванов А.В.',type:'Мост (3 единицы)',lab:'ДентАрт',sent:'2026-07-12',due:'2026-07-22',status:0,comment:''},
+  {id:4,patient:'Кузнецов Алексей Юрьевич',doctor:'Жегало И.И.',type:'Коронка металлокерамика',lab:'OWNLAB',sent:'2026-07-05',due:'2026-07-14',status:3,comment:'Сдано 14.07, пациент доволен'},
+  {id:5,patient:'Новикова Елена Владимировна',doctor:'Иванов А.В.',type:'Временные коронки',lab:'OWNLAB',sent:'2026-07-14',due:'2026-07-18',status:1,comment:'Срочно, пациент едет в отпуск'},
+];
+let nextId=6;
+
+function fmt(d){if(!d)return'—';const[y,m,dd]=d.split('-');return`${dd}.${m}.${y}`}
+function isOverdue(rec){if(rec.status===3||rec.status===5||!rec.due)return false;return new Date(rec.due)<new Date()}
+
+function updateStats(){
+  const total=records.length;
+  const inWork=records.filter(r=>r.status===0||r.status===1).length;
+  const ready=records.filter(r=>r.status===2).length;
+  const delayed=records.filter(r=>r.status===4).length;
+  document.getElementById('statsRow').innerHTML=`
+    <div class="stat"><div class="stat-n">${total}</div><div class="stat-l">Всего работ</div></div>
+    <div class="stat"><div class="stat-n" style="color:var(--text-accent)">${inWork}</div><div class="stat-l">В производстве</div></div>
+    <div class="stat"><div class="stat-n" style="color:#0F6E56">${ready}</div><div class="stat-l">Ожидают примерки</div></div>
+    <div class="stat"><div class="stat-n" style="color:#A32D2D">${delayed}</div><div class="stat-l">Задержка</div></div>
+  `;
+}
+
+function updateFilters(){
+  const counts=[records.length,...STATUSES.map((_,i)=>records.filter(r=>r.status===i).length)];
+  document.getElementById('filterRow').innerHTML=FILTERS.map((f,i)=>`
+    <button class="filter-btn ${activeFilter===i?'active':''}" onclick="setFilter(${i})">${f} <span style="opacity:.7">${counts[i]}</span></button>
+  `).join('');
+}
+
+function setFilter(i){activeFilter=i;render()}
+
+function render(){
+  updateStats();
+  updateFilters();
+  const q=document.getElementById('searchInput').value.toLowerCase();
+  let data=records.filter(r=>{
+    if(activeFilter>0&&r.status!==activeFilter-1)return false;
+    if(q&&!r.patient.toLowerCase().includes(q)&&!r.doctor.toLowerCase().includes(q))return false;
+    return true;
+  });
+  const tbody=document.getElementById('tbody');
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted)">Нет записей</td></tr>`;return}
+  tbody.innerHTML=data.map(r=>{
+    const od=isOverdue(r);
+    const st=STATUSES[r.status];
+    return`<tr>
+      <td style="font-weight:500">${r.patient}</td>
+      <td style="color:var(--text-secondary)">${r.doctor}</td>
+      <td>${r.type}</td>
+      <td style="color:var(--text-secondary)">${r.lab||'—'}</td>
+      <td style="color:var(--text-secondary)">${fmt(r.sent)}</td>
+      <td class="${od?'overdue':''}">${fmt(r.due)}${od?' ⚠':''}</td>
+      <td>
+        <button class="badge ${st.cls}" onclick="openStatusMenu(event,${r.id})">
+          <span class="dot"></span>${st.label} <i class="ti ti-chevron-down" style="font-size:10px" aria-hidden="true"></i>
+        </button>
+      </td>
+      <td class="comment-cell" title="${r.comment}">${r.comment||'—'}</td>
+      <td><div class="act">
+        <button class="ico-btn" onclick="openModal(${r.id})" title="Редактировать"><i class="ti ti-edit" aria-hidden="true"></i></button>
+        <button class="ico-btn" onclick="deleteRec(${r.id})" title="Удалить" style="color:#A32D2D;border-color:#F09595"><i class="ti ti-trash" aria-hidden="true"></i></button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function openStatusMenu(e,id){
+  e.stopPropagation();
+  const menu=document.getElementById('statusMenu');
+  menu.innerHTML=STATUSES.map((s,i)=>`
+    <div class="status-opt" onclick="setStatus(${id},${i})">
+      <button class="badge ${s.cls}" style="cursor:default;pointer-events:none"><span class="dot"></span>${s.label}</button>
+    </div>
+  `).join('');
+  const rect=e.currentTarget.getBoundingClientRect();
+  menu.style.display='block';
+  menu.style.top=(rect.bottom+window.scrollY+4)+'px';
+  menu.style.left=rect.left+'px';
+}
+
+function setStatus(id,status){
+  const r=records.find(x=>x.id===id);
+  if(r)r.status=status;
+  document.getElementById('statusMenu').style.display='none';
+  render();
+}
+
+document.addEventListener('click',()=>document.getElementById('statusMenu').style.display='none');
+
+function openModal(id=null){
+  editId=id;
+  const r=id?records.find(x=>x.id===id):null;
+  document.getElementById('modalTitle').textContent=id?'Редактировать запись':'Новая лабораторная работа';
+  document.getElementById('f_patient').value=r?.patient||'';
+  document.getElementById('f_doctor').value=r?.doctor||'Жегало И.И.';
+  document.getElementById('f_type').value=r?.type||'Коронка цирконий';
+  document.getElementById('f_lab').value=r?.lab||'OWNLAB';
+  document.getElementById('f_sent').value=r?.sent||new Date().toISOString().split('T')[0];
+  document.getElementById('f_due').value=r?.due||'';
+  document.getElementById('f_status').value=r?.status||0;
+  document.getElementById('f_comment').value=r?.comment||'';
+  document.getElementById('modalBg').classList.add('open');
+}
+
+function closeModal(){document.getElementById('modalBg').classList.remove('open')}
+
+function saveRecord(){
+  const data={
+    patient:document.getElementById('f_patient').value.trim(),
+    doctor:document.getElementById('f_doctor').value.trim(),
+    type:document.getElementById('f_type').value,
+    lab:document.getElementById('f_lab').value.trim(),
+    sent:document.getElementById('f_sent').value,
+    due:document.getElementById('f_due').value,
+    status:+document.getElementById('f_status').value,
+    comment:document.getElementById('f_comment').value.trim()
+  };
+  if(!data.patient){alert('Укажите ФИО пациента');return}
+  if(editId){
+    const idx=records.findIndex(x=>x.id===editId);
+    if(idx!==-1)records[idx]={...records[idx],...data};
+  }else{
+    records.unshift({id:nextId++,...data});
+  }
+  closeModal();
+  render();
+}
+
+function deleteRec(id){
+  if(!confirm('Удалить запись?'))return;
+  records=records.filter(x=>x.id!==id);
+  render();
+}
+
+render();
+</script>

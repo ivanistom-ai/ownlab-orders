@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OWNLAB AI — Dental CAD System</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0a0b;
+    --surface: #111113;
+    --surface2: #18181c;
+    --surface3: #1f1f25;
+    --border: rgba(255,255,255,0.06);
+    --border-active: rgba(255,140,0,0.4);
+    --orange: #FF8C00;
+    --orange-dim: rgba(255,140,0,0.15);
+    --orange-glow: rgba(255,140,0,0.05);
+    --text: #e8e8ea;
+    --text-dim: #6b6b75;
+    --text-muted: #3a3a42;
+    --green: #22c55e;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* TOP BAR */
+  .topbar {
+    height: 48px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 24px;
+    flex-shrink: 0;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .logo-own { color: var(--orange); font-weight: 700; }
+  .logo-lab { color: #666; font-weight: 400; }
+  .logo-sep { color: var(--text-muted); margin: 0 4px; }
+  .logo-ai { 
+    font-size: 9px; 
+    background: var(--orange);
+    color: #000;
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  .topbar-divider { width: 1px; height: 20px; background: var(--border); }
+
+  .file-name {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+  }
+
+  .topbar-status {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-family: var(--mono);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+  .status-pill.ready { background: rgba(34,197,94,0.1); color: var(--green); border: 1px solid rgba(34,197,94,0.2); }
+  .status-pill.scanning { background: rgba(255,140,0,0.1); color: var(--orange); border: 1px solid rgba(255,140,0,0.2); }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .status-dot.pulse { animation: pulse 1.5s ease-in-out infinite; }
+
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* MAIN LAYOUT */
+  .main {
+    display: grid;
+    grid-template-columns: 220px 1fr 300px;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* LEFT PANEL */
+  .left-panel {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel-section {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-label {
+    font-size: 9px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .tool-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+    margin-bottom: 2px;
+  }
+  .tool-btn:hover { background: var(--surface2); color: var(--text); }
+  .tool-btn.active { 
+    background: var(--orange-dim); 
+    color: var(--orange);
+    border: 1px solid rgba(255,140,0,0.2);
+  }
+  .tool-icon { width: 16px; height: 16px; flex-shrink: 0; }
+
+  /* AI TASK BUTTONS */
+  .ai-task-btn {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-family: var(--sans);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    margin-bottom: 6px;
+    position: relative;
+    overflow: hidden;
+  }
+  .ai-task-btn::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--orange);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.2s;
+  }
+  .ai-task-btn:hover { border-color: var(--border-active); background: var(--surface3); }
+  .ai-task-btn:hover::before { transform: scaleX(1); }
+  .ai-task-btn.selected { border-color: rgba(255,140,0,0.5); background: var(--orange-dim); }
+  .ai-task-btn.selected::before { transform: scaleX(1); }
+  .task-name { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+  .task-desc { font-size: 10px; color: var(--text-dim); }
+
+  .ai-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 9px;
+    font-family: var(--mono);
+    color: var(--orange);
+    margin-top: 4px;
+    opacity: 0.7;
+  }
+
+  /* CENTER — 3D VIEWPORT */
+  .viewport {
+    background: var(--bg);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .viewport-toolbar {
+    height: 38px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 8px;
+  }
+
+  .vt-btn {
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 11px;
+    font-family: var(--mono);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .vt-btn:hover { background: var(--surface2); color: var(--text); border-color: rgba(255,255,255,0.12); }
+  .vt-btn.active { background: var(--orange-dim); color: var(--orange); border-color: rgba(255,140,0,0.3); }
+
+  .vt-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+
+  /* 3D CANVAS SIMULATION */
+  .canvas-area {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .canvas-bg {
+    position: absolute;
+    inset: 0;
+    background: 
+      radial-gradient(ellipse 60% 40% at 50% 50%, rgba(255,140,0,0.03) 0%, transparent 70%),
+      linear-gradient(180deg, #0a0a0b 0%, #0d0d10 100%);
+  }
+
+  /* Grid lines */
+  .canvas-bg::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 40px 40px;
+    mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black, transparent);
+  }
+
+  /* 3D TOOTH MODEL (SVG simulation) */
+  .tooth-model {
+    position: relative;
+    z-index: 1;
+    animation: float 4s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%,100% { transform: translateY(0) rotate3d(1,0,0,0deg); }
+    50% { transform: translateY(-8px) rotate3d(1,0,0,2deg); }
+  }
+
+  /* DEFECT MARKERS */
+  .defect-marker {
+    position: absolute;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--red);
+    box-shadow: 0 0 12px rgba(239,68,68,0.6);
+    animation: defect-pulse 2s ease-in-out infinite;
+    cursor: pointer;
+    z-index: 10;
+  }
+  .defect-marker::after {
+    content: attr(data-label);
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 9px;
+    font-family: var(--mono);
+    color: var(--red);
+    white-space: nowrap;
+    background: rgba(10,10,11,0.9);
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid rgba(239,68,68,0.3);
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  .defect-marker:hover::after { opacity: 1; }
+  .defect-marker.warn { background: var(--orange); box-shadow: 0 0 12px rgba(255,140,0,0.6); }
+  .defect-marker.warn::after { color: var(--orange); border-color: rgba(255,140,0,0.3); }
+
+  @keyframes defect-pulse {
+    0%,100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.4); opacity: 0.7; }
+  }
+
+  /* CORNER INFO */
+  .viewport-info {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.8;
+  }
+
+  .viewport-coords {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    text-align: right;
+    line-height: 1.8;
+  }
+
+  /* RIGHT PANEL */
+  .right-panel {
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  /* AI SCAN RESULTS */
+  .ai-results {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .section-title {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .scan-badge {
+    font-size: 9px;
+    font-family: var(--mono);
+    color: var(--green);
+    background: rgba(34,197,94,0.1);
+    border: 1px solid rgba(34,197,94,0.2);
+    padding: 2px 7px;
+    border-radius: 10px;
+  }
+
+  /* DEFECT CARDS */
+  .defect-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .defect-card:hover { border-color: var(--border-active); }
+  .defect-card.critical { border-left: 3px solid var(--red); }
+  .defect-card.warning { border-left: 3px solid var(--orange); }
+  .defect-card.info { border-left: 3px solid var(--blue); }
+
+  .defect-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+  .defect-dot.critical { background: var(--red); }
+  .defect-dot.warning { background: var(--orange); }
+  .defect-dot.info { background: var(--blue); }
+
+  .defect-content { flex: 1; min-width: 0; }
+  .defect-name { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+  .defect-detail { font-size: 10px; color: var(--text-dim); line-height: 1.4; }
+  .defect-confidence {
+    font-size: 9px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* CONFIDENCE BAR */
+  .conf-bar {
+    height: 2px;
+    background: var(--surface3);
+    border-radius: 1px;
+    margin-top: 4px;
+    overflow: hidden;
+  }
+  .conf-fill {
+    height: 100%;
+    border-radius: 1px;
+    background: var(--orange);
+    transition: width 1s ease;
+  }
+  .conf-fill.high { background: var(--green); }
+  .conf-fill.med { background: var(--orange); }
+  .conf-fill.low { background: var(--red); }
+
+  /* AI PARAMETERS */
+  .params-section {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .param-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .param-label { font-size: 11px; color: var(--text-dim); }
+
+  .param-value {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 4px 8px;
+    border-radius: 4px;
+    min-width: 80px;
+    text-align: center;
+  }
+
+  .param-slider {
+    width: 100%;
+    margin-bottom: 14px;
+  }
+  .param-slider-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+  }
+  .slider-label { font-size: 11px; color: var(--text-dim); }
+  .slider-val { font-size: 11px; font-family: var(--mono); color: var(--orange); }
+
+  input[type=range] {
+    width: 100%;
+    height: 4px;
+    -webkit-appearance: none;
+    background: var(--surface3);
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--orange);
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(255,140,0,0.5);
+  }
+
+  /* GENERATE BUTTON */
+  .generate-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--orange);
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+  .generate-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%);
+    transform: translateX(-100%);
+  }
+  .generate-btn:hover { background: #ff9e00; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(255,140,0,0.3); }
+  .generate-btn:hover::before { animation: shine 0.5s ease; }
+  .generate-btn:active { transform: translateY(0); }
+
+  @keyframes shine {
+    to { transform: translateX(100%); }
+  }
+
+  .generate-area { padding: 16px; }
+
+  /* PROGRESS INDICATOR */
+  .ai-progress {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--surface2);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    display: none;
+  }
+  .ai-progress.visible { display: block; }
+  .progress-label {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--orange);
+    margin-bottom: 8px;
+  }
+  .progress-bar {
+    height: 3px;
+    background: var(--surface3);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--orange), #ffcc00);
+    border-radius: 2px;
+    animation: progress-anim 2s ease forwards;
+    width: 0%;
+  }
+  @keyframes progress-anim { to { width: 87%; } }
+
+  .progress-steps {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .progress-step {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    opacity: 0;
+    animation: fadeIn 0.3s ease forwards;
+  }
+  .progress-step:nth-child(1) { animation-delay: 0.1s; }
+  .progress-step:nth-child(2) { animation-delay: 0.6s; }
+  .progress-step:nth-child(3) { animation-delay: 1.1s; }
+  .progress-step.done { color: var(--green); }
+  .progress-step.active { color: var(--orange); }
+  @keyframes fadeIn { to { opacity: 1; } }
+
+  /* STATS BAR */
+  .stats-bar {
+    padding: 12px 16px;
+    background: var(--surface2);
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 20px;
+    flex-shrink: 0;
+  }
+  .stat-item { flex: 1; }
+  .stat-val { font-size: 16px; font-family: var(--mono); font-weight: 700; color: var(--text); }
+  .stat-val span { color: var(--orange); }
+  .stat-lbl { font-size: 9px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 2px; }
+
+  /* UPLOAD OVERLAY */
+  .upload-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(10,10,11,0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+  .upload-overlay.hidden { opacity: 0; pointer-events: none; }
+  .upload-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
+  .upload-title { font-family: var(--mono); font-size: 14px; color: var(--text); margin-bottom: 6px; }
+  .upload-sub { font-size: 12px; color: var(--text-muted); }
+  .upload-formats { 
+    margin-top: 16px; 
+    font-size: 10px; 
+    font-family: var(--mono); 
+    color: var(--text-muted);
+    display: flex;
+    gap: 8px;
+  }
+  .fmt-badge {
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+  }
+  .fmt-badge.orange { border-color: rgba(255,140,0,0.3); color: var(--orange); }
+
+  /* NOTIFICATION */
+  .notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--surface2);
+    border: 1px solid var(--border-active);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 12px;
+    color: var(--text);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transform: translateX(120%);
+    transition: transform 0.3s ease;
+    max-width: 280px;
+  }
+  .notification.show { transform: translateX(0); }
+  .notif-icon { font-size: 16px; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 2px; }
+
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">
+    <span class="logo-own">OWN</span><span class="logo-lab">LAB</span>
+    <span class="logo-sep">/</span>
+    <span class="logo-ai">AI</span>
+  </div>
+  <div class="topbar-divider"></div>
+  <span class="file-name" id="fileNameDisplay">scan_upper_jaw_001.stl</span>
+  <div class="topbar-status">
+    <div class="status-pill ready">
+      <div class="status-dot"></div>
+      SCAN READY
+    </div>
+    <div style="font-size:11px;color:var(--text-dim);font-family:var(--mono)">v0.9.1-beta</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+
+    <!-- VIEW TOOLS -->
+    <div class="panel-section">
+      <div class="panel-label">Инструменты</div>
+
+      <button class="tool-btn active" onclick="setTool(this)">
+        <svg class="tool-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="8" cy="8" r="5"/><line x1="11" y1="11" x2="14" y2="14"/>
+        </svg>
+        Выделение
+      </button>
+      <button class="tool-btn" onclick="setTool(this)">
+        <svg class="tool-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="1" fill="currentColor"/>
+        </svg>
+        Осмотр
+      </button>
+      <button class="tool-btn" onclick="setTool(this)">
+        <svg class="tool-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M3 8h10M8 3v10"/>
+        </svg>
+        Измерение
+      </button>
+      <button class="tool-btn" onclick="setTool(this)">
+        <svg class="tool-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M2 12 L8 4 L14 12 Z"/>
+        </svg>
+        Сечение
+      </button>
+    </div>
+
+    <!-- AI TASKS -->
+    <div class="panel-section" style="border-bottom:none;flex:1;overflow-y:auto;">
+      <div class="panel-label">AI Задача</div>
+
+      <button class="ai-task-btn selected" onclick="selectTask(this,'CROWN')">
+        <div class="task-name">Коронка</div>
+        <div class="task-desc">Полная анатомическая реставрация</div>
+        <div class="ai-badge">⬡ AI AUTO</div>
+      </button>
+
+      <button class="ai-task-btn" onclick="selectTask(this,'VENEER')">
+        <div class="task-name">Винир</div>
+        <div class="task-desc">Минимально инвазивная эстетика</div>
+        <div class="ai-badge">⬡ AI AUTO</div>
+      </button>
+
+      <button class="ai-task-btn" onclick="selectTask(this,'WAXUP')">
+        <div class="task-name">Wax-up</div>
+        <div class="task-desc">Цифровое диагностическое моделирование</div>
+        <div class="ai-badge">⬡ AI AUTO</div>
+      </button>
+
+      <button class="ai-task-btn" onclick="selectTask(this,'SPLINT')">
+        <div class="task-name">Сплинт-шина</div>
+        <div class="task-desc">Окклюзионная шина по гнатологии</div>
+        <div class="ai-badge">⬡ AI AUTO</div>
+      </button>
+
+      <button class="ai-task-btn" onclick="selectTask(this,'DETECT')">
+        <div class="task-name">Только диагностика</div>
+        <div class="task-desc">Анализ дефектов без моделирования</div>
+        <div class="ai-badge">⬡ SCAN ONLY</div>
+      </button>
+    </div>
+
+  </div>
+
+  <!-- CENTER VIEWPORT -->
+  <div class="viewport">
+
+    <!-- VIEWPORT TOOLBAR -->
+    <div class="viewport-toolbar">
+      <button class="vt-btn active">TOP</button>
+      <button class="vt-btn">FRONT</button>
+      <button class="vt-btn">3D</button>
+      <div class="vt-sep"></div>
+      <button class="vt-btn" onclick="toggleWireframe()">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1">
+          <path d="M1 1 L9 1 L9 9 L1 9 Z M1 5 L9 5 M5 1 L5 9"/>
+        </svg>
+        WIRE
+      </button>
+      <button class="vt-btn" onclick="toggleDefects()">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1">
+          <circle cx="5" cy="5" r="4"/><path d="M5 3v3M5 7.5v.5"/>
+        </svg>
+        DEFECTS
+      </button>
+      <button class="vt-btn" onclick="runScan()">
+        ⬡ RUN AI SCAN
+      </button>
+      <div class="vt-sep" style="margin-left:auto"></div>
+      <div style="font-size:10px;font-family:var(--mono);color:var(--text-muted)">
+        <span id="polyCount">247,832</span> poly
+      </div>
+    </div>
+
+    <!-- CANVAS -->
+    <div class="canvas-area">
+      <div class="canvas-bg"></div>
+
+      <!-- TOOTH 3D MODEL (SVG) -->
+      <div class="tooth-model">
+        <svg width="420" height="340" viewBox="0 0 420 340" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="toothGrad" cx="45%" cy="35%" r="65%">
+              <stop offset="0%" stop-color="#4a4a54"/>
+              <stop offset="40%" stop-color="#2a2a32"/>
+              <stop offset="100%" stop-color="#141418"/>
+            </radialGradient>
+            <radialGradient id="toothGrad2" cx="40%" cy="30%" r="60%">
+              <stop offset="0%" stop-color="#3a3a42"/>
+              <stop offset="100%" stop-color="#111116"/>
+            </radialGradient>
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="3" result="blur"/>
+              <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+            </filter>
+            <linearGradient id="edgeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="rgba(255,140,0,0.6)"/>
+              <stop offset="100%" stop-color="rgba(255,140,0,0.1)"/>
+            </linearGradient>
+            <filter id="shadow">
+              <feDropShadow dx="0" dy="20" stdDeviation="20" flood-color="rgba(0,0,0,0.8)"/>
+            </filter>
+          </defs>
+
+          <!-- UPPER JAW TEETH ROW -->
+          <!-- Tooth 1 -->
+          <g filter="url(#shadow)">
+          <path d="M 60 200 Q 55 180 60 160 Q 65 140 75 130 Q 85 120 95 125 Q 100 127 105 130 Q 110 120 120 125 Q 130 130 132 145 Q 135 160 130 175 Q 128 185 130 200 Q 125 215 95 218 Q 65 215 60 200 Z" fill="url(#toothGrad2)" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/>
+          <!-- Cusps -->
+          <path d="M 75 130 Q 72 115 78 108 Q 84 100 90 105 Q 96 110 95 125" fill="url(#toothGrad2)" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/>
+          <path d="M 105 130 Q 108 115 115 110 Q 122 104 125 112 Q 128 122 120 125" fill="url(#toothGrad2)" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/>
+          <!-- Highlight -->
+          <path d="M 80 160 Q 78 150 83 143 Q 88 135 95 138 Q 102 141 104 150 Q 106 160 100 165 Q 92 168 84 165 Z" fill="rgba(255,255,255,0.04)"/>
+          </g>
+
+          <!-- Tooth 2 (selected/active - orange outline) -->
+          <g filter="url(#shadow)" id="selectedTooth">
+          <path d="M 145 198 Q 140 178 143 155 Q 147 135 158 122 Q 168 110 178 112 Q 185 113 190 118 Q 195 110 205 112 Q 218 115 222 132 Q 225 148 222 168 Q 220 182 222 198 Q 217 215 183 218 Q 148 215 145 198 Z" fill="url(#toothGrad)" stroke="rgba(255,140,0,0.5)" stroke-width="1.5"/>
+          <!-- Orange glow effect -->
+          <path d="M 145 198 Q 140 178 143 155 Q 147 135 158 122 Q 168 110 178 112 Q 185 113 190 118 Q 195 110 205 112 Q 218 115 222 132 Q 225 148 222 168 Q 220 182 222 198 Q 217 215 183 218 Q 148 215 145 198 Z" fill="none" stroke="rgba(255,140,0,0.2)" stroke-width="4"/>
+          <!-- Cusps -->
+          <path d="M 158 122 Q 155 105 162 96 Q 169 86 176 92 Q 183 98 181 112" fill="url(#toothGrad)" stroke="rgba(255,140,0,0.3)" stroke-width="1"/>
+          <path d="M 190 118 Q 194 103 202 98 Q 210 92 215 102 Q 218 112 210 118" fill="url(#toothGrad)" stroke="rgba(255,140,0,0.3)" stroke-width="1"/>
+          <!-- Highlight -->
+          <path d="M 162 162 Q 160 150 167 142 Q 174 133 183 137 Q 192 141 193 152 Q 194 163 187 170 Q 178 174 168 170 Z" fill="rgba(255,255,255,0.05)"/>
+          <!-- Defect area (red) -->
+          <path d="M 192 140 Q 202 138 208 145 Q 213 153 207 160 Q 200 167 192 162 Q 185 157 186 150 Z" fill="rgba(239,68,68,0.2)" stroke="rgba(239,68,68,0.5)" stroke-width="1" stroke-dasharray="3,2"/>
+          </g>
+
+          <!-- Tooth 3 -->
+          <g filter="url(#shadow)">
+          <path d="M 235 195 Q 232 178 236 158 Q 240 138 250 126 Q 260 115 270 118 Q 275 120 278 124 Q 282 116 290 118 Q 300 122 303 138 Q 306 154 303 170 Q 301 182 303 195 Q 298 210 268 213 Q 238 210 235 195 Z" fill="url(#toothGrad2)" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/>
+          <path d="M 250 126 Q 247 110 254 103 Q 261 95 268 100 Q 275 105 273 118" fill="url(#toothGrad2)" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/>
+          <path d="M 278 124 Q 282 108 290 104 Q 298 99 302 108 Q 305 118 298 122" fill="url(#toothGrad2)" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/>
+          </g>
+
+          <!-- Tooth 4 (premolar) -->
+          <g filter="url(#shadow)">
+          <path d="M 318 190 Q 315 173 318 154 Q 322 134 332 122 Q 342 110 352 113 Q 360 116 363 122 Q 368 115 376 118 Q 386 123 388 140 Q 390 157 387 172 Q 385 183 387 190 Q 382 205 352 208 Q 322 205 318 190 Z" fill="url(#toothGrad2)" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/>
+          <!-- Warning area (orange) -->
+          <path d="M 340 145 Q 350 142 358 148 Q 365 155 360 162 Q 354 168 345 165 Q 338 162 338 155 Z" fill="rgba(255,140,0,0.15)" stroke="rgba(255,140,0,0.4)" stroke-width="1" stroke-dasharray="3,2"/>
+          </g>
+
+          <!-- GINGIVA LINE -->
+          <path d="M 48 215 Q 95 225 183 220 Q 268 215 315 218 Q 380 210 400 215" fill="none" stroke="rgba(180,60,60,0.2)" stroke-width="1.5" stroke-dasharray="none"/>
+
+          <!-- ROOT INDICATION (lower, transparent) -->
+          <path d="M 70 220 Q 68 250 72 280 Q 76 305 95 310 Q 114 305 118 280 Q 122 250 120 220" fill="rgba(255,255,255,0.01)" stroke="rgba(255,255,255,0.03)" stroke-width="0.5"/>
+          <path d="M 153 222 Q 150 255 155 285 Q 160 312 183 315 Q 205 312 210 285 Q 215 255 212 222" fill="rgba(255,255,255,0.01)" stroke="rgba(255,140,0,0.06)" stroke-width="0.5"/>
+
+          <!-- MEASUREMENT LINES -->
+          <line x1="145" y1="95" x2="222" y2="95" stroke="rgba(255,140,0,0.3)" stroke-width="0.5" stroke-dasharray="3,3"/>
+          <line x1="145" y1="91" x2="145" y2="99" stroke="rgba(255,140,0,0.3)" stroke-width="0.5"/>
+          <line x1="222" y1="91" x2="222" y2="99" stroke="rgba(255,140,0,0.3)" stroke-width="0.5"/>
+          <text x="183" y="90" fill="rgba(255,140,0,0.6)" font-size="8" font-family="monospace" text-anchor="middle">8.2 mm</text>
+
+          <!-- AXIS INDICATOR -->
+          <g transform="translate(390,300)">
+            <line x1="0" y1="0" x2="18" y2="0" stroke="rgba(239,68,68,0.6)" stroke-width="1.5"/>
+            <text x="21" y="4" fill="rgba(239,68,68,0.6)" font-size="8" font-family="monospace">X</text>
+            <line x1="0" y1="0" x2="0" y2="-18" stroke="rgba(34,197,94,0.6)" stroke-width="1.5"/>
+            <text x="3" y="-20" fill="rgba(34,197,94,0.6)" font-size="8" font-family="monospace">Y</text>
+            <line x1="0" y1="0" x2="-12" y2="8" stroke="rgba(59,130,246,0.6)" stroke-width="1.5"/>
+            <text x="-22" y="12" fill="rgba(59,130,246,0.6)" font-size="8" font-family="monospace">Z</text>
+          </g>
+
+          <!-- AI SCAN OVERLAY POINTS -->
+          <circle cx="200" cy="148" r="3" fill="rgba(239,68,68,0.8)" filter="url(#glow)">
+            <animate attributeName="r" values="3;5;3" dur="2s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.8;0.4;0.8" dur="2s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="345" cy="152" r="3" fill="rgba(255,140,0,0.8)" filter="url(#glow)">
+            <animate attributeName="r" values="3;4.5;3" dur="2.5s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.8;0.3;0.8" dur="2.5s" repeatCount="indefinite"/>
+          </circle>
+
+          <!-- SCAN SWEEP LINE (animation) -->
+          <rect x="48" y="80" width="360" height="1.5" fill="url(#edgeGrad)" opacity="0.6" id="scanLine">
+            <animateTransform attributeName="transform" type="translate" values="0,0;0,200;0,0" dur="3s" repeatCount="indefinite"/>
+          </rect>
+
+          <!-- AI GRID OVERLAY (subtle) -->
+          <g opacity="0.06">
+            <line x1="48" y1="140" x2="408" y2="140" stroke="white" stroke-width="0.5"/>
+            <line x1="48" y1="175" x2="408" y2="175" stroke="white" stroke-width="0.5"/>
+            <line x1="183" y1="80" x2="183" y2="320" stroke="white" stroke-width="0.5"/>
+          </g>
+        </svg>
+      </div>
+
+      <!-- VIEWPORT INFO -->
+      <div class="viewport-info">
+        STL · upper_jaw · 247K poly<br>
+        Зуб 12 — выбран<br>
+        Задача: <span style="color:var(--orange)">CROWN</span>
+      </div>
+      <div class="viewport-coords">
+        X: 183.2mm<br>
+        Y: 148.6mm<br>
+        Z: 8.2mm
+      </div>
+
+      <!-- UPLOAD OVERLAY -->
+      <div class="upload-overlay hidden" id="uploadOverlay" onclick="simulateLoad()">
+        <div class="upload-icon">⬡</div>
+        <div class="upload-title">ЗАГРУЗИТЬ STL / PLY / OBJ</div>
+        <div class="upload-sub">Перетащите файл или нажмите для выбора</div>
+        <div class="upload-formats">
+          <span class="fmt-badge orange">.STL</span>
+          <span class="fmt-badge">.PLY</span>
+          <span class="fmt-badge">.OBJ</span>
+          <span class="fmt-badge">.DCM</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- STATS BAR -->
+    <div class="stats-bar">
+      <div class="stat-item">
+        <div class="stat-val"><span>3</span></div>
+        <div class="stat-lbl">Дефектов найдено</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val"><span>94</span>%</div>
+        <div class="stat-lbl">AI Уверенность</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val">12</div>
+        <div class="stat-lbl">Зубов в скане</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val" style="color:var(--green)">OK</div>
+        <div class="stat-lbl">STL Качество</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+
+    <!-- AI SCAN RESULTS -->
+    <div class="ai-results">
+      <div class="section-header">
+        <span class="section-title">AI Диагностика</span>
+        <span class="scan-badge">SCAN DONE</span>
+      </div>
+
+      <div class="defect-card critical" onclick="highlightDefect(1)">
+        <div class="defect-dot critical"></div>
+        <div class="defect-content">
+          <div class="defect-name">Дефект эмали</div>
+          <div class="defect-detail">Мезиальная поверхность, зуб 12. Потеря тканей ~1.8мм²</div>
+          <div class="conf-bar"><div class="conf-fill high" style="width:94%"></div></div>
+          <div class="defect-confidence">Confidence: 94%</div>
+        </div>
+      </div>
+
+      <div class="defect-card warning" onclick="highlightDefect(2)">
+        <div class="defect-dot warning"></div>
+        <div class="defect-content">
+          <div class="defect-name">Поднутрение</div>
+          <div class="defect-detail">Окклюзальная треть, зуб 14. Требует коррекции препарирования</div>
+          <div class="conf-bar"><div class="conf-fill med" style="width:78%"></div></div>
+          <div class="defect-confidence">Confidence: 78%</div>
+        </div>
+      </div>
+
+      <div class="defect-card info" onclick="highlightDefect(3)">
+        <div class="defect-dot" style="background:var(--blue)"></div>
+        <div class="defect-content">
+          <div class="defect-name">Граница препарирования</div>
+          <div class="defect-detail">Зуб 12, дистальный уступ нечёткий. Рекомендуется уточнить</div>
+          <div class="conf-bar"><div class="conf-fill" style="width:82%;background:var(--blue)"></div></div>
+          <div class="defect-confidence">Confidence: 82%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PARAMETERS -->
+    <div class="params-section">
+      <div class="section-header">
+        <span class="section-title">Параметры моделирования</span>
+      </div>
+
+      <div class="param-row">
+        <span class="param-label">Зуб</span>
+        <div class="param-value" id="toothNum">12</div>
+      </div>
+      <div class="param-row">
+        <span class="param-label">Материал</span>
+        <div class="param-value">e.max</div>
+      </div>
+      <div class="param-row">
+        <span class="param-label">Тип задачи</span>
+        <div class="param-value" id="taskDisplay" style="color:var(--orange);border-color:rgba(255,140,0,0.3)">CROWN</div>
+      </div>
+
+      <div class="param-slider">
+        <div class="param-slider-header">
+          <span class="slider-label">Окклюзионный контакт</span>
+          <span class="slider-val" id="occVal">0.10 мм</span>
+        </div>
+        <input type="range" min="5" max="20" value="10" oninput="document.getElementById('occVal').textContent=(this.value/100).toFixed(2)+' мм'">
+      </div>
+
+      <div class="param-slider">
+        <div class="param-slider-header">
+          <span class="slider-label">Толщина стенки</span>
+          <span class="slider-val" id="wallVal">1.0 мм</span>
+        </div>
+        <input type="range" min="6" max="20" value="10" oninput="document.getElementById('wallVal').textContent=(this.value/10).toFixed(1)+' мм'">
+      </div>
+
+      <div class="param-slider">
+        <div class="param-slider-header">
+          <span class="slider-label">Цементная щель</span>
+          <span class="slider-val" id="cementVal">80 мкм</span>
+        </div>
+        <input type="range" min="40" max="150" value="80" oninput="document.getElementById('cementVal').textContent=this.value+' мкм'">
+      </div>
+
+    </div>
+
+    <!-- GENERATE -->
+    <div class="generate-area">
+      <button class="generate-btn" onclick="generateModel()">
+        ⬡ GENERATE AI MODEL
+      </button>
+      <div class="ai-progress" id="aiProgress">
+        <div class="progress-label" id="progressLabel">⬡ AI PROCESSING...</div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-steps" id="progressSteps">
+          <div class="progress-step done">✓ Анализ STL геометрии</div>
+          <div class="progress-step done">✓ Сегментация зуба-антагониста</div>
+          <div class="progress-step active">↻ Генерация анатомии коронки...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXPORT -->
+    <div style="padding:12px 16px;border-top:1px solid var(--border);margin-top:auto;">
+      <div class="section-title" style="margin-bottom:10px;">Экспорт</div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="showNotif('STL экспортирован')" style="flex:1;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:var(--mono);cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='rgba(255,140,0,0.4)'" onmouseout="this.style.borderColor='var(--border)'">STL</button>
+        <button onclick="showNotif('3MF экспортирован')" style="flex:1;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:var(--mono);cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='rgba(255,140,0,0.4)'" onmouseout="this.style.borderColor='var(--border)'">3MF</button>
+        <button onclick="showNotif('Отчёт PDF создан')" style="flex:1;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:var(--mono);cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='rgba(255,140,0,0.4)'" onmouseout="this.style.borderColor='var(--border)'">PDF</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- NOTIFICATION -->
+<div class="notification" id="notif">
+  <span class="notif-icon" id="notifIcon">✓</span>
+  <span id="notifText">Операция выполнена</span>
+</div>
+
+<script>
+function setTool(btn) {
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function selectTask(btn, task) {
+  document.querySelectorAll('.ai-task-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('taskDisplay').textContent = task;
+  showNotif('Задача: ' + btn.querySelector('.task-name').textContent);
+}
+
+function toggleWireframe() {
+  this.event?.currentTarget?.classList?.toggle('active');
+  showNotif('Режим wireframe переключён');
+}
+
+function toggleDefects() {
+  showNotif('Маркеры дефектов переключены');
+}
+
+function runScan() {
+  const btn = event.currentTarget;
+  const origText = btn.innerHTML;
+  btn.innerHTML = '↻ SCANNING...';
+  btn.classList.add('active');
+  setTimeout(() => {
+    btn.innerHTML = '✓ SCAN DONE';
+    setTimeout(() => {
+      btn.innerHTML = origText;
+      btn.classList.remove('active');
+    }, 2000);
+  }, 2000);
+  showNotif('AI скан запущен...');
+}
+
+function highlightDefect(id) {
+  showNotif('Дефект ' + id + ' выделен на модели');
+}
+
+function generateModel() {
+  const progress = document.getElementById('aiProgress');
+  const fill = document.getElementById('progressFill');
+  progress.classList.add('visible');
+  
+  setTimeout(() => {
+    showNotif('✓ Модель сгенерирована — STL готов к экспорту');
+  }, 3500);
+}
+
+let notifTimeout;
+function showNotif(text, icon='✓') {
+  const notif = document.getElementById('notif');
+  document.getElementById('notifText').textContent = text;
+  document.getElementById('notifIcon').textContent = icon;
+  notif.classList.add('show');
+  clearTimeout(notifTimeout);
+  notifTimeout = setTimeout(() => notif.classList.remove('show'), 3000);
+}
+
+// Simulate initial load
+window.addEventListener('load', () => {
+  setTimeout(() => showNotif('⬡ Файл загружен · 247K полигонов'), 800);
+  setTimeout(() => showNotif('⬡ AI скан завершён · 3 дефекта'), 2500);
+});
+</script>
+</body>
+</html>
