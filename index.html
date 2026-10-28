@@ -219,6 +219,12 @@ button,input,select,textarea{font-family:var(--font)}
 .modal-btn.cancel{background:var(--card2);color:var(--t3);border:1px solid var(--border)}.modal-btn.cancel:hover{background:var(--card3)}
 .upload-zone-sm{border:2px dashed var(--border2);border-radius:var(--r);padding:18px;text-align:center;cursor:pointer;color:var(--t4);font-size:11px;transition:all .2s}
 .upload-zone-sm:hover{border-color:var(--org);color:var(--t2)}
+.upload-zone.drag,.upload-zone-sm.drag{border-color:var(--org);background:var(--org-d);color:var(--t2)}
+.picked-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.picked-item{display:flex;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:11px}
+.picked-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t1)}
+.picked-size{color:var(--t4);font-family:var(--mono);font-size:10px}
+.picked-del{border:none;background:none;color:var(--t4);cursor:pointer;font-size:14px;line-height:1;padding:0 2px}.picked-del:hover{color:var(--red)}
 
 /* TOAST */
 .toast{position:fixed;bottom:24px;right:24px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 32px rgba(0,0,0,.12);min-width:280px;z-index:999;animation:toastIn .3s;display:none}
@@ -348,7 +354,8 @@ button,input,select,textarea{font-family:var(--font)}
         <div id="tab-files" class="tab-pane">
           <div class="info-sec">
             <div class="info-card"><div class="info-card-title">Прикреплённые файлы</div><div class="files-grid" id="dp-files"></div></div>
-            <div class="upload-zone" onclick="showToast('Загрузка файлов','STL · DICOM · JPG · PDF до 500 МБ')">
+            <input type="file" id="dp-file-input" multiple accept=".stl,.dcm,.dicom,.ply,.obj,.3dm,.jpg,.jpeg,.png,.heic,.pdf,.zip" hidden onchange="addFilesToOrder(this.files);this.value=''">
+            <div class="upload-zone" id="dp-drop" onclick="document.getElementById('dp-file-input').click()">
               <div style="font-size:24px;margin-bottom:6px">📂</div>
               <div>Добавить файл · <span style="color:var(--org)">STL · DICOM · JPG · PDF</span></div>
             </div>
@@ -377,10 +384,11 @@ button,input,select,textarea{font-family:var(--font)}
     <div class="modal-sub"><span style="width:6px;height:6px;border-radius:50%;background:var(--org);display:inline-block"></span> OWN Digital Laboratory</div>
     <div class="form-sec-title">Пациент и клиника</div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Пациент *</label><input class="form-input" id="f-patient" placeholder="Фамилия И.О."></div>
-      <div class="form-group"><label class="form-label">Клиника *</label><input class="form-input" id="f-clinic" placeholder="Название клиники"></div>
+      <div class="form-group"><label class="form-label">Пациент *</label><input class="form-input" id="f-patient" list="dl-patient" autocomplete="off" placeholder="Фамилия И.О."></div>
+      <div class="form-group"><label class="form-label">Клиника *</label><input class="form-input" id="f-clinic" list="dl-clinic" autocomplete="off" placeholder="Название клиники"></div>
     </div>
-    <div class="form-group"><label class="form-label">Врач</label><input class="form-input" id="f-doctor" placeholder="Фамилия И.О. врача"></div>
+    <div class="form-group"><label class="form-label">Врач</label><input class="form-input" id="f-doctor" list="dl-doctor" autocomplete="off" placeholder="Фамилия И.О. врача"></div>
+    <datalist id="dl-patient"></datalist><datalist id="dl-clinic"></datalist><datalist id="dl-doctor"></datalist><datalist id="dl-tech"></datalist>
     <div class="form-div"></div>
     <div class="form-sec-title">Работа</div>
     <div class="form-group"><label class="form-label">Тип работы *</label>
@@ -414,10 +422,7 @@ button,input,select,textarea{font-family:var(--font)}
     <div class="form-row">
       <div class="form-group"><label class="form-label">Срок выполнения *</label><input class="form-input" id="f-deadline" type="date"></div>
       <div class="form-group"><label class="form-label">Техник</label>
-        <select class="form-select" id="f-tech">
-          <option value="">— Назначить —</option>
-          <option value="artem">Артём К.</option><option value="maria">Мария В.</option><option value="dmitry">Дмитрий Н.</option>
-        </select>
+        <input class="form-input" id="f-tech" list="dl-tech" autocomplete="off" placeholder="Выберите или введите">
       </div>
     </div>
     <div class="form-row">
@@ -429,11 +434,13 @@ button,input,select,textarea{font-family:var(--font)}
     <div class="form-sec-title">Техническое задание</div>
     <div class="form-group"><label class="form-label">Комментарии и ТЗ</label><textarea class="form-textarea" id="f-notes" placeholder="Пожелания по форме, окклюзии, текстуре..."></textarea></div>
     <div class="form-group"><label class="form-label">Файлы</label>
-      <div class="upload-zone-sm" onclick="showToast('Загрузка','STL · DICOM · JPG · PDF до 500 МБ')">
+      <input type="file" id="f-files" multiple accept=".stl,.dcm,.dicom,.ply,.obj,.3dm,.jpg,.jpeg,.png,.heic,.pdf,.zip" hidden onchange="addPending(this.files);this.value=''">
+      <div class="upload-zone-sm" id="f-drop" onclick="document.getElementById('f-files').click()">
         <div style="font-size:24px;margin-bottom:6px">📁</div>
         <div>Перетащите или <span style="color:var(--org)">выберите файлы</span></div>
         <div style="font-size:9px;color:var(--t5);margin-top:4px">STL · DICOM · JPG · PNG · PDF · до 500 МБ</div>
       </div>
+      <div class="picked-list" id="f-picked"></div>
     </div>
     <div class="modal-actions">
       <button class="modal-btn cancel" onclick="closeModal()">Отмена</button>
@@ -573,9 +580,74 @@ function renderTL(o){
 }
 
 function renderFiles(o){
-  const icons={stl:'🦷','3dm':'💻',jpg:'📸',png:'📸',pdf:'📄'};
-  document.getElementById('dp-files').innerHTML=(o.files||[]).map(f=>{const ext=f.n.split('.').pop().toLowerCase();return`<div class="file-item" onclick="showToast('${f.n}','Открытие файла')"><span class="file-icon">${icons[ext]||f.i}</span><div class="file-name">${f.n}</div></div>`;}).join('');
+  const icons={stl:'🦷',ply:'🦷',obj:'🦷','3dm':'💻',dcm:'🩻',dicom:'🩻',jpg:'📸',jpeg:'📸',png:'📸',heic:'📸',pdf:'📄',zip:'🗜️'};
+  const el=document.getElementById('dp-files');
+  if(!(o.files?.length)){el.innerHTML=`<div style="grid-column:1/-1;color:var(--t4);font-size:11px">Файлов пока нет</div>`;return;}
+  el.innerHTML=o.files.map((f,i)=>{const ext=f.n.split('.').pop().toLowerCase();return`<div class="file-item" onclick="openFile('${o.id}',${i})" title="${esc(f.n)}"><span class="file-icon">${icons[ext]||f.i||'📎'}</span><div class="file-name">${esc(f.n)}</div></div>`;}).join('');
 }
+
+// ── ФАЙЛЫ ─────────────────────────────────────────────────────────────────────
+const MAX_FILE=500*1024*1024;
+let pendingFiles=[];
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function fmtSize(b){return b>=1048576?(b/1048576).toFixed(1)+' МБ':Math.max(1,Math.round(b/1024))+' КБ';}
+function takeFiles(list){
+  const ok=[];
+  for(const f of list){if(f.size>MAX_FILE)showToast('Файл слишком большой',f.name+' — больше 500 МБ','error');else ok.push(f);}
+  return ok;
+}
+function toFileObj(f){return{n:f.name,size:f.size,url:URL.createObjectURL(f)};}
+function addPending(list){pendingFiles.push(...takeFiles(list));renderPending();}
+function removePending(i){pendingFiles.splice(i,1);renderPending();}
+function renderPending(){
+  document.getElementById('f-picked').innerHTML=pendingFiles.map((f,i)=>`<div class="picked-item"><span>📎</span><span class="picked-name">${esc(f.name)}</span><span class="picked-size">${fmtSize(f.size)}</span><button class="picked-del" onclick="removePending(${i})" title="Убрать">✕</button></div>`).join('');
+}
+function addFilesToOrder(list){
+  const o=ORDERS.find(x=>x.id===selId); if(!o) return;
+  const ok=takeFiles(list); if(!ok.length) return;
+  o.files=(o.files||[]).concat(ok.map(toFileObj));
+  renderFiles(o); showToast('Файлы добавлены',ok.length+' шт. · '+o.num);
+}
+function openFile(oid,i){
+  const f=ORDERS.find(x=>x.id===oid)?.files?.[i]; if(!f) return;
+  if(!f.url){showToast(f.n,'Демо-файл — содержимого нет','warning');return;}
+  const a=document.createElement('a'); a.href=f.url;
+  if(/\.(jpe?g|png|pdf)$/i.test(f.n)) a.target='_blank'; else a.download=f.n;
+  a.click();
+}
+function bindDrop(id,onFiles){
+  const el=document.getElementById(id);
+  el.addEventListener('dragover',e=>{e.preventDefault();el.classList.add('drag');});
+  el.addEventListener('dragleave',()=>el.classList.remove('drag'));
+  el.addEventListener('drop',e=>{e.preventDefault();el.classList.remove('drag');onFiles(e.dataTransfer.files);});
+}
+bindDrop('f-drop',addPending);
+bindDrop('dp-drop',addFilesToOrder);
+
+// ── СПРАВОЧНИКИ (запоминание введённых значений) ──────────────────────────────
+const DICT_KEY='ownlab_dict_v1';
+const DICT_FIELDS=['patient','clinic','doctor','tech'];
+let DICT=loadDict();
+function loadDict(){
+  let saved={};
+  try{saved=JSON.parse(localStorage.getItem(DICT_KEY))||{};}catch(e){}
+  const d={};
+  DICT_FIELDS.forEach(k=>{
+    const seed=ORDERS.map(o=>o[k]).concat(k==='tech'?['Артём К.','Мария В.','Дмитрий Н.']:[]);
+    d[k]=uniq((saved[k]||[]).concat(seed));
+  });
+  return d;
+}
+function uniq(arr){const seen=new Set();return arr.filter(v=>{if(!v||v==='—')return false;const key=v.trim().toLowerCase();if(seen.has(key))return false;seen.add(key);return true;});}
+function remember(k,v){
+  if(!v||v==='—') return;
+  DICT[k]=uniq([v].concat(DICT[k])).slice(0,300);
+  try{localStorage.setItem(DICT_KEY,JSON.stringify(DICT));}catch(e){}
+}
+function renderDatalists(){
+  DICT_FIELDS.forEach(k=>{document.getElementById('dl-'+k).innerHTML=DICT[k].map(v=>`<option value="${esc(v)}">`).join('');});
+}
+renderDatalists();
 
 function renderComments(o){
   const c=document.getElementById('dp-comments');
@@ -640,12 +712,13 @@ function submitOrder(){
   const req=[{id:'f-patient',l:'Пациент'},{id:'f-clinic',l:'Клиника'},{id:'f-type',l:'Тип работы'},{id:'f-units',l:'Количество'},{id:'f-deadline',l:'Срок'}];
   for(const f of req){if(!document.getElementById(f.id).value.trim()){showToast('Заполните поле',f.l+' — обязательное','error');document.getElementById(f.id).focus();return;}}
   const types={veneers_emax:'Виниры (е.мах)',crown_zirconia:'Коронки (цирконий)',crown_emax:'Коронки (е.мах)',bridge:'Мостовидный протез',implant_crown:'Имплант-корона',full_mouth:'Полная реставрация',temp:'Временные (ПММА)'};
-  const techs={artem:'Артём К.',maria:'Мария В.',dmitry:'Дмитрий Н.'};
   const num='#OWN-0'+(55+ORDERS.length);
   const dlRaw=document.getElementById('f-deadline').value;
   const dl=dlRaw?new Date(dlRaw).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'}):'—';
-  const techVal=document.getElementById('f-tech').value;
-  const newO={id:'o'+Date.now(),num,patient:document.getElementById('f-patient').value.trim(),clinic:document.getElementById('f-clinic').value.trim(),doctor:document.getElementById('f-doctor').value.trim()||'—',type:types[document.getElementById('f-type').value]||document.getElementById('f-type').value,units:parseInt(document.getElementById('f-units').value)||1,shade:document.getElementById('f-shade').value||'—',material:document.getElementById('f-material').value||'—',teeth:document.getElementById('f-teeth').value||'—',dl,tech:techs[techVal]||'—',tk:(techs[techVal]||'').split(' ')[0],color:'green',stage:1,prog:4,urgent:document.getElementById('f-priority').value==='urgent',files:[],comments:[]};
+  const techVal=document.getElementById('f-tech').value.trim();
+  const newO={id:'o'+Date.now(),num,patient:document.getElementById('f-patient').value.trim(),clinic:document.getElementById('f-clinic').value.trim(),doctor:document.getElementById('f-doctor').value.trim()||'—',type:types[document.getElementById('f-type').value]||document.getElementById('f-type').value,units:parseInt(document.getElementById('f-units').value)||1,shade:document.getElementById('f-shade').value||'—',material:document.getElementById('f-material').value||'—',teeth:document.getElementById('f-teeth').value||'—',dl,tech:techVal||'—',tk:techVal.split(' ')[0],color:'green',stage:1,prog:4,urgent:document.getElementById('f-priority').value==='urgent',files:pendingFiles.map(toFileObj),comments:[]};
+  DICT_FIELDS.forEach(k=>remember(k,newO[k])); renderDatalists();
+  pendingFiles=[]; renderPending();
   ORDERS.unshift(newO); closeModal(); renderOrders(); openDetail(newO.id);
   showToast('✅ Заказ создан · '+num,'Уведомление отправлено');
 }
