@@ -106,7 +106,7 @@ create table if not exists public.settings (
   updated_at timestamptz not null default now()
 );
 alter table public.settings drop constraint if exists settings_key_check;
-alter table public.settings add constraint settings_key_check check (key in ('seller','lab','catalog'));
+alter table public.settings add constraint settings_key_check check (key in ('seller','lab','catalog','bot'));
 -- 'catalog' — список услуг без цен (видят все, чтобы выбрать услугу в заказе); цены — в 'lab'
 insert into public.settings(key, value) values
   ('catalog', '{"items":[{"k":"veneers_emax","n":"Винир (е.мах / фельспат)","u":"шт"},{"k":"crown_zirconia","n":"Коронка (цирконий)","u":"шт"},{"k":"crown_emax","n":"Коронка (е.мах)","u":"шт"},{"k":"bridge","n":"Мостовидный протез (за ед.)","u":"ед."},{"k":"implant_crown","n":"Имплант-корона","u":"шт"},{"k":"full_mouth","n":"Полная реставрация (за ед.)","u":"ед."},{"k":"temp","n":"Временная конструкция (ПММА)","u":"шт"}]}')
@@ -315,7 +315,7 @@ create policy invites_delete on public.invites for delete to authenticated
 -- settings
 drop policy if exists settings_select on public.settings;
 create policy settings_select on public.settings for select to authenticated
-  using (public.is_staff() or (key = 'catalog' and public.my_role() is not null));
+  using (public.is_staff() or (key in ('catalog','bot') and public.my_role() is not null));
 drop policy if exists settings_write on public.settings;
 create policy settings_write on public.settings for update to authenticated
   using (case key when 'seller' then public.my_role() = 'owner' else public.is_staff() end)
@@ -516,8 +516,288 @@ do $$ begin
   begin alter publication supabase_realtime add table public.order_files; exception when others then null; end;
 end $$;
 
+-- ══ 1. ИСТОРИЯ ЭТАПОВ ═══════════════════════════════════════════════════════
+create table if not exists public.order_events (
+  id bigserial primary key,
+  order_id uuid not null references public.orders(id) on delete cascade,
+  kind text not null check (kind in ('created','stage','tech')),
+  from_stage int, to_stage int, info text not null default '',
+  actor_id uuid references public.profiles(id) on delete set null,
+  actor_name text not null default '', actor_role text not null default '',
+  created_at timestamptz not null default now()
+);
+create index if not exists order_events_order_idx on public.order_events(order_id, created_at);
+alter table public.order_events enable row level security;
+drop policy if exists events_select on public.order_events;
+create policy events_select on public.order_events for select to authenticated using (public.can_see_order(order_id));
+grant select on public.order_events to authenticated;
+
+-- Каждое создание, смена этапа и назначение техника записывается автоматически
+create or replace function public.orders_log() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare a public.profiles; t text;
+begin
+  select * into a from public.profiles where id = auth.uid();
+  if tg_op = 'INSERT' then
+    insert into public.order_events(order_id, kind, to_stage, actor_id, actor_name, actor_role, created_at)
+    values (new.id, 'created', new.stage, a.id, coalesce(a.full_name, ''), coalesce(a.role, ''), new.created_at);
+    if new.tech_id is not null then
+      select full_name into t from public.profiles where id = new.tech_id;
+      insert into public.order_events(order_id, kind, info, actor_id, actor_name, actor_role)
+      values (new.id, 'tech', coalesce(t, ''), a.id, coalesce(a.full_name, ''), coalesce(a.role, ''));
+    end if;
+  else
+    if new.stage <> old.stage then
+      insert into public.order_events(order_id, kind, from_stage, to_stage, actor_id, actor_name, actor_role)
+      values (new.id, 'stage', old.stage, new.stage, a.id, coalesce(a.full_name, ''), coalesce(a.role, ''));
+    end if;
+    if new.tech_id is distinct from old.tech_id then
+      select full_name into t from public.profiles where id = new.tech_id;
+      insert into public.order_events(order_id, kind, info, actor_id, actor_name, actor_role)
+      values (new.id, 'tech', coalesce(t, 'снят'), a.id, coalesce(a.full_name, ''), coalesce(a.role, ''));
+    end if;
+  end if;
+  return null;
+end $$;
+drop trigger if exists orders_log on public.orders;
+create trigger orders_log after insert or update on public.orders
+  for each row execute function public.orders_log();
+
+-- ══ 2. УВЕДОМЛЕНИЯ В TELEGRAM ═══════════════════════════════════════════════
+-- Привязка Telegram — отдельно от профиля, чтобы chat_id не видели другие пользователи
+create table if not exists public.user_telegram (
+  user_id uuid primary key references public.profiles(id) on delete cascade,
+  chat_id bigint, link_code text unique, enabled boolean not null default true,
+  linked_at timestamptz
+);
+alter table public.user_telegram enable row level security;
+drop policy if exists tg_select on public.user_telegram;
+create policy tg_select on public.user_telegram for select to authenticated using (user_id = auth.uid());
+grant select on public.user_telegram to authenticated;
+
+-- Очередь сообщений: читает только серверная функция notify (service role)
+create table if not exists public.notify_queue (
+  id bigserial primary key,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  body text not null,
+  created_at timestamptz not null default now(),
+  sent_at timestamptz, error text
+);
+alter table public.notify_queue enable row level security;
+
+-- Служебные настройки (адрес функции notify); без политик — недоступны через API
+create table if not exists public.app_config (key text primary key, value text not null);
+alter table public.app_config enable row level security;
+
+create or replace function public.tg_link_code() returns text
+language plpgsql security definer set search_path = public as $$
+declare c text := replace(gen_random_uuid()::text, '-', '');
+begin
+  if public.my_role() is null then raise exception 'Нет доступа'; end if;
+  insert into public.user_telegram(user_id, link_code) values (auth.uid(), c)
+  on conflict (user_id) do update set link_code = c;
+  return c;
+end $$;
+create or replace function public.tg_set_enabled(p_on boolean) returns void
+language sql security definer set search_path = public as $$
+  update public.user_telegram set enabled = p_on where user_id = auth.uid()
+$$;
+create or replace function public.tg_unlink() returns void
+language sql security definer set search_path = public as $$
+  update public.user_telegram set chat_id = null, linked_at = null where user_id = auth.uid()
+$$;
+
+-- Поставить сообщение в очередь для пользователей (только с подключённым Telegram)
+create or replace function public.enqueue(p_users uuid[], p_body text, p_except uuid) returns void
+language sql security definer set search_path = public as $$
+  insert into public.notify_queue(user_id, body)
+  select distinct t.user_id, p_body from public.user_telegram t join public.profiles p on p.id = t.user_id
+  where t.user_id = any(p_users) and t.user_id is distinct from p_except
+    and t.chat_id is not null and t.enabled and p.active
+$$;
+create or replace function public.staff_ids() returns uuid[]
+language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(id), '{}') from public.profiles where role in ('owner','lab_admin') and active
+$$;
+create or replace function public.clinic_side_ids(p_order public.orders) returns uuid[]
+language sql stable security definer set search_path = public as $$
+  select array_remove(array[p_order.doctor_id] || coalesce((select array_agg(id) from public.profiles
+    where role = 'clinic_admin' and clinic_id = p_order.clinic_id and active), '{}'), null)
+$$;
+
+create or replace function public.notify_event() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare o public.orders; head text; stages text[] := array['Заказ создан','Заказ принят лабораторией','Техническая проверка','Планирование работы',
+  'Цифровое моделирование (CAD)','Согласование дизайна','Производство','Индивидуальная работа техника','Контроль качества',
+  'Работа готова','Передана в доставку','В пути','Получена клиникой','Заказ завершён'];
+begin
+  select * into o from public.orders where id = new.order_id;
+  head := o.num || ' · ' || coalesce(o.data->>'patient', '') || E'\n' || coalesce(o.data->>'type', '');
+  if new.kind = 'created' then
+    perform public.enqueue(public.staff_ids(), '🆕 Новый заказ ' || head || E'\nСрок: ' || coalesce(o.data->>'dl', '—')
+      || case when new.actor_name <> '' then E'\nСоздал: ' || new.actor_name else '' end, new.actor_id);
+  elsif new.kind = 'tech' and o.tech_id is not null then
+    perform public.enqueue(array[o.tech_id], '🔧 Вам назначен заказ ' || head || E'\nСрок: ' || coalesce(o.data->>'dl', '—'), new.actor_id);
+  elsif new.kind = 'stage' then
+    if new.to_stage = 6 then
+      perform public.enqueue(public.clinic_side_ids(o), '⏳ Дизайн ждёт согласования: ' || head, new.actor_id);
+    elsif new.to_stage = 7 and new.from_stage = 6 then
+      perform public.enqueue(array_remove(array[o.tech_id], null) || public.staff_ids(), '✅ Дизайн согласован: ' || head, new.actor_id);
+    elsif new.to_stage = 11 then
+      perform public.enqueue(public.clinic_side_ids(o), '🚚 Работа передана в доставку: ' || head
+        || coalesce(E'\nТрек: ' || nullif(o.data->>'trackNum', ''), ''), new.actor_id);
+    elsif new.to_stage = 13 then
+      perform public.enqueue(array_remove(array[o.tech_id], null) || public.staff_ids(), '📦 Клиника получила работу: ' || head, new.actor_id);
+    elsif o.tech_id is not null and new.actor_id is distinct from o.tech_id then
+      perform public.enqueue(array[o.tech_id], '➡️ ' || head || E'\nЭтап: ' || stages[new.to_stage], new.actor_id);
+    end if;
+  end if;
+  return null;
+end $$;
+drop trigger if exists notify_event on public.order_events;
+create trigger notify_event after insert on public.order_events for each row execute function public.notify_event();
+
+create or replace function public.notify_comment() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare o public.orders; r uuid[];
+begin
+  select * into o from public.orders where id = new.order_id;
+  r := array_remove(array[o.tech_id, o.created_by], null) || public.clinic_side_ids(o);
+  if new.author_role not in ('owner','lab_admin') then r := r || public.staff_ids(); end if;
+  perform public.enqueue(r, '💬 ' || o.num || ' · ' || coalesce(o.data->>'patient', '') || E'\n'
+    || new.author_name || ': ' || left(new.body, 500), new.author_id);
+  return null;
+end $$;
+drop trigger if exists notify_comment on public.order_comments;
+create trigger notify_comment after insert on public.order_comments for each row execute function public.notify_comment();
+
+-- Разбудить функцию отправки (через pg_net). Ошибки сети никогда не ломают сохранение заказа.
+create extension if not exists pg_net;
+create or replace function public.notify_ping() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare u text;
+begin
+  select value into u from public.app_config where key = 'notify_url';
+  if u is not null then
+    begin perform net.http_post(url := u, body := '{}'::jsonb); exception when others then null; end;
+  end if;
+  return null;
+end $$;
+drop trigger if exists notify_ping on public.notify_queue;
+create trigger notify_ping after insert on public.notify_queue for each statement execute function public.notify_ping();
+
+-- Забрать пачку сообщений для отправки (только для service role)
+create or replace function public.claim_notifications() returns table(id bigint, chat_id bigint, body text)
+language sql security definer set search_path = public as $$
+  update public.notify_queue q set sent_at = now()
+  from public.user_telegram t
+  where q.id in (select id from public.notify_queue where sent_at is null order by id limit 50 for update skip locked)
+    and t.user_id = q.user_id
+  returning q.id, t.chat_id, q.body
+$$;
+revoke all on function public.claim_notifications() from public, anon, authenticated;
+revoke all on function public.enqueue(uuid[], text, uuid) from public, anon, authenticated;
+grant execute on function public.tg_link_code(), public.tg_set_enabled(boolean), public.tg_unlink() to authenticated;
+
+-- ══ 4. РАСЧЁТЫ С КЛИНИКАМИ ══════════════════════════════════════════════════
+create table if not exists public.documents (
+  id uuid primary key default gen_random_uuid(),
+  clinic_id uuid not null references public.clinics(id) on delete cascade,
+  kind text not null check (kind in ('inv','nak','sf')),
+  number text not null, doc_date date not null,
+  total numeric not null default 0, vat numeric not null default 0,
+  order_ids uuid[] not null default '{}', title text not null default '', html text not null,
+  created_by uuid references public.profiles(id) on delete set null default auth.uid(),
+  created_at timestamptz not null default now()
+);
+create index if not exists documents_clinic_idx on public.documents(clinic_id, doc_date);
+create table if not exists public.payments (
+  id uuid primary key default gen_random_uuid(),
+  clinic_id uuid not null references public.clinics(id) on delete cascade,
+  document_id uuid references public.documents(id) on delete set null,
+  amount numeric not null check (amount > 0),
+  paid_at date not null default current_date,
+  method text not null default 'безналичный', note text not null default '',
+  created_by uuid references public.profiles(id) on delete set null default auth.uid(),
+  created_at timestamptz not null default now()
+);
+create index if not exists payments_clinic_idx on public.payments(clinic_id, paid_at);
+alter table public.documents enable row level security;
+alter table public.payments enable row level security;
+drop policy if exists documents_select on public.documents;
+create policy documents_select on public.documents for select to authenticated
+  using (public.is_staff() or (public.my_role() = 'clinic_admin' and clinic_id = public.my_clinic()));
+drop policy if exists documents_insert on public.documents;
+create policy documents_insert on public.documents for insert to authenticated with check (public.is_staff());
+drop policy if exists documents_delete on public.documents;
+create policy documents_delete on public.documents for delete to authenticated using (public.my_role() = 'owner');
+drop policy if exists payments_select on public.payments;
+create policy payments_select on public.payments for select to authenticated
+  using (public.is_staff() or (public.my_role() = 'clinic_admin' and clinic_id = public.my_clinic()));
+drop policy if exists payments_write on public.payments;
+create policy payments_write on public.payments for all to authenticated using (public.is_staff()) with check (public.is_staff());
+grant select, insert, delete on public.documents to authenticated;
+grant select, insert, update, delete on public.payments to authenticated;
+
+-- Начисления = выполненные работы (по дате получения клиникой), оплаты = поступления
+create or replace function public.ledger_rows(p_clinic uuid)
+returns table(clinic_id uuid, d date, kind text, ref text, debit numeric, credit numeric)
+language sql stable security definer set search_path = public as $$
+  select o.clinic_id, (o.done_at at time zone 'Europe/Moscow')::date, 'accrual',
+         o.num || ' · ' || coalesce(o.data->>'patient', '') || ' · ' || coalesce(o.data->>'type', ''),
+         coalesce(pr.price, 0) * coalesce(nullif(o.data->>'units', '')::numeric, 1), 0::numeric
+  from public.orders o left join public.order_prices pr on pr.order_id = o.id
+  where o.done_at is not null and (p_clinic is null or o.clinic_id = p_clinic)
+    and (public.is_staff() or (public.my_role() = 'clinic_admin' and o.clinic_id = public.my_clinic()))
+  union all
+  select p.clinic_id, p.paid_at, 'payment',
+         'Оплата' || case when p.method <> '' then ' (' || p.method || ')' else '' end
+           || coalesce(' по ' || case d.kind when 'inv' then 'счёту' when 'nak' then 'накладной' else 'счёту-фактуре' end || ' № ' || d.number, '')
+           || case when p.note <> '' then ' · ' || p.note else '' end,
+         0::numeric, p.amount
+  from public.payments p left join public.documents d on d.id = p.document_id
+  where (p_clinic is null or p.clinic_id = p_clinic)
+    and (public.is_staff() or (public.my_role() = 'clinic_admin' and p.clinic_id = public.my_clinic()))
+$$;
+create or replace function public.clinic_balances(p_from date, p_to date)
+returns table(clinic_id uuid, name text, opening numeric, accrued numeric, paid numeric, closing numeric, last_payment date)
+language sql stable security definer set search_path = public as $$
+  with l as (select * from public.ledger_rows(null))
+  select c.id, c.name,
+    coalesce(sum(l.debit - l.credit) filter (where p_from is not null and l.d < p_from), 0),
+    coalesce(sum(l.debit) filter (where (p_from is null or l.d >= p_from) and (p_to is null or l.d <= p_to)), 0),
+    coalesce(sum(l.credit) filter (where (p_from is null or l.d >= p_from) and (p_to is null or l.d <= p_to)), 0),
+    coalesce(sum(l.debit - l.credit) filter (where p_to is null or l.d <= p_to), 0),
+    max(l.d) filter (where l.kind = 'payment')
+  from public.clinics c left join l on l.clinic_id = c.id
+  where public.is_staff() or (public.my_role() = 'clinic_admin' and c.id = public.my_clinic())
+  group by c.id, c.name order by c.name
+$$;
+create or replace function public.clinic_ledger(p_clinic uuid, p_from date, p_to date)
+returns table(d date, kind text, ref text, debit numeric, credit numeric)
+language sql stable security definer set search_path = public as $$
+  select d, kind, ref, debit, credit from public.ledger_rows(p_clinic)
+  where (p_from is null or d >= p_from) and (p_to is null or d <= p_to)
+  order by d, kind, ref
+$$;
+revoke all on function public.ledger_rows(uuid) from public, anon;
+revoke all on function public.clinic_balances(date, date), public.clinic_ledger(uuid, date, date) from public, anon;
+grant execute on function public.ledger_rows(uuid), public.clinic_balances(date, date), public.clinic_ledger(uuid, date, date) to authenticated;
+
+do $$ begin
+  begin alter publication supabase_realtime add table public.order_events; exception when others then null; end;
+  begin alter publication supabase_realtime add table public.payments; exception when others then null; end;
+end $$;
+
 -- ── ДОЗАПОЛНЕНИЕ ДЛЯ УЖЕ СОЗДАННЫХ ЗАКАЗОВ ──────────────────────────────────
 alter table public.orders disable trigger orders_guard;
 update public.orders set done_at = coalesce(done_at, updated_at), tech_percent = coalesce(tech_percent, public.tech_percent_for(tech_id))
  where stage >= 13 and done_at is null;
 alter table public.orders enable trigger orders_guard;
+insert into public.order_events(order_id, kind, to_stage, created_at)
+select o.id, 'created', o.stage, o.created_at from public.orders o
+where not exists (select 1 from public.order_events e where e.order_id = o.id);
+
+-- Адрес функции отправки уведомлений этого проекта
+insert into public.app_config(key, value) values ('notify_url', 'https://ncvsivphvnuftvczaogu.supabase.co/functions/v1/notify')
+on conflict (key) do update set value = excluded.value;
