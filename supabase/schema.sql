@@ -43,6 +43,9 @@ create table if not exists public.orders (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+alter table public.orders add column if not exists done_at timestamptz;       -- когда работа выполнена (этап 13+)
+alter table public.orders add column if not exists tech_percent numeric;      -- ставка техника на момент выполнения
+create index if not exists orders_done_idx on public.orders(done_at);
 create index if not exists orders_clinic_idx on public.orders(clinic_id);
 create index if not exists orders_tech_idx on public.orders(tech_id);
 create index if not exists orders_doctor_idx on public.orders(doctor_id);
@@ -88,13 +91,26 @@ create table if not exists public.invites (
   used_by uuid references public.profiles(id) on delete set null
 );
 
+-- Ставка оплаты труда техника, % от суммы выполненной работы
+create table if not exists public.tech_rates (
+  tech_id uuid primary key references public.profiles(id) on delete cascade,
+  percent numeric not null check (percent between 0 and 100),
+  updated_at timestamptz not null default now()
+);
+
 -- key: 'seller' — реквизиты и НДС (меняет только собственник)
 --      'lab'    — прайс, нумерация документов, реквизиты покупателей (собственник и админ лаборатории)
 create table if not exists public.settings (
-  key text primary key check (key in ('seller','lab')),
+  key text primary key,
   value jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
+alter table public.settings drop constraint if exists settings_key_check;
+alter table public.settings add constraint settings_key_check check (key in ('seller','lab','catalog'));
+-- 'catalog' — список услуг без цен (видят все, чтобы выбрать услугу в заказе); цены — в 'lab'
+insert into public.settings(key, value) values
+  ('catalog', '{"items":[{"k":"veneers_emax","n":"Винир (е.мах / фельспат)","u":"шт"},{"k":"crown_zirconia","n":"Коронка (цирконий)","u":"шт"},{"k":"crown_emax","n":"Коронка (е.мах)","u":"шт"},{"k":"bridge","n":"Мостовидный протез (за ед.)","u":"ед."},{"k":"implant_crown","n":"Имплант-корона","u":"шт"},{"k":"full_mouth","n":"Полная реставрация (за ед.)","u":"ед."},{"k":"temp","n":"Временная конструкция (ПММА)","u":"шт"}]}')
+on conflict (key) do nothing;
 insert into public.settings(key, value) values
   ('seller', '{"name":"OWN Digital Laboratory","vat":"none"}'),
   ('lab', '{"prices":{"veneers_emax":25000,"crown_zirconia":18000,"crown_emax":20000,"bridge":16000,"implant_crown":30000,"full_mouth":22000,"temp":5000},"docNum":{"nak":1,"sf":1},"buyers":{}}')
@@ -125,6 +141,15 @@ language sql stable security definer set search_path = public as $$
     ))
 $$;
 
+-- Ставка техника: личная, иначе общая из настроек лаборатории, иначе 0
+create or replace function public.tech_percent_for(uid uuid) returns numeric
+language sql stable security definer set search_path = public as $$
+  select case when uid is null then null else coalesce(
+    (select percent from public.tech_rates where tech_id = uid),
+    (select nullif(value->>'techPercent', '')::numeric from public.settings where key = 'lab'),
+    0) end
+$$;
+
 -- ── ТРИГГЕРЫ ─────────────────────────────────────────────────────────────────
 -- Не-сотрудники лаборатории не могут перепривязать заказ к другой клинике, врачу или технику
 create or replace function public.orders_guard() returns trigger
@@ -147,6 +172,19 @@ begin
       if public.my_role() = 'doctor' then new.doctor_id := auth.uid(); end if;
     end if;
     new.created_by := auth.uid();
+  end if;
+  -- Дата выполнения и ставка техника фиксируются, когда заказ доходит до этапа «Получена клиникой»
+  if new.stage >= 13 then
+    if tg_op = 'INSERT' or old.stage < 13 then
+      new.done_at := case when tg_op = 'INSERT' and public.is_staff() and new.done_at is not null then new.done_at else now() end;
+      new.tech_percent := public.tech_percent_for(new.tech_id);
+    else
+      new.done_at := old.done_at;
+      if new.tech_id is distinct from old.tech_id then new.tech_percent := public.tech_percent_for(new.tech_id);
+      elsif not public.is_staff() then new.tech_percent := old.tech_percent; end if;
+    end if;
+  else
+    new.done_at := null; new.tech_percent := null;
   end if;
   if new.tech_id is not null and not exists (select 1 from public.profiles where id = new.tech_id and role = 'tech') then
     raise exception 'Назначить можно только техника';
@@ -194,6 +232,7 @@ alter table public.order_comments enable row level security;
 alter table public.order_files enable row level security;
 alter table public.invites enable row level security;
 alter table public.settings enable row level security;
+alter table public.tech_rates enable row level security;
 
 -- clinics
 drop policy if exists clinics_select on public.clinics;
@@ -276,11 +315,19 @@ create policy invites_delete on public.invites for delete to authenticated
 -- settings
 drop policy if exists settings_select on public.settings;
 create policy settings_select on public.settings for select to authenticated
-  using (public.is_staff());
+  using (public.is_staff() or (key = 'catalog' and public.my_role() is not null));
 drop policy if exists settings_write on public.settings;
 create policy settings_write on public.settings for update to authenticated
   using (case key when 'seller' then public.my_role() = 'owner' else public.is_staff() end)
   with check (case key when 'seller' then public.my_role() = 'owner' else public.is_staff() end);
+
+-- tech_rates: техник видит свою ставку, лаборатория — все и меняет их
+drop policy if exists tech_rates_select on public.tech_rates;
+create policy tech_rates_select on public.tech_rates for select to authenticated
+  using (public.is_staff() or tech_id = auth.uid());
+drop policy if exists tech_rates_write on public.tech_rates;
+create policy tech_rates_write on public.tech_rates for all to authenticated
+  using (public.is_staff()) with check (public.is_staff());
 
 -- ── ФУНКЦИИ (RPC) ────────────────────────────────────────────────────────────
 -- Первый зарегистрированный становится собственником (только пока собственника нет)
@@ -399,16 +446,51 @@ begin
   return n;
 end $$;
 
+-- Выполненные работы и заработок техников за период.
+-- Лаборатория видит всех и суммы; техник — только свои работы и свой заработок (без цены заказа).
+create or replace function public.tech_pay(p_from timestamptz, p_to timestamptz)
+returns table(order_id uuid, num text, patient text, svc text, work text, units numeric, done_at timestamptz,
+              tech_id uuid, tech_name text, amount numeric, percent numeric, pay numeric)
+language sql stable security definer set search_path = public as $$
+  select o.id, o.num, o.data->>'patient', o.data->>'svc', o.data->>'type',
+         coalesce(nullif(o.data->>'units', '')::numeric, 1), o.done_at, o.tech_id, p.full_name,
+         case when public.is_staff() then coalesce(pr.price, 0) * coalesce(nullif(o.data->>'units', '')::numeric, 1) end,
+         coalesce(o.tech_percent, 0),
+         round(coalesce(pr.price, 0) * coalesce(nullif(o.data->>'units', '')::numeric, 1) * coalesce(o.tech_percent, 0) / 100, 2)
+  from public.orders o
+  left join public.order_prices pr on pr.order_id = o.id
+  left join public.profiles p on p.id = o.tech_id
+  where o.done_at is not null and o.tech_id is not null
+    and (p_from is null or o.done_at >= p_from) and (p_to is null or o.done_at < p_to)
+    and (public.is_staff() or (public.my_role() = 'tech' and o.tech_id = auth.uid()))
+  order by o.done_at desc
+$$;
+
+-- Применить текущие ставки к работам, выполненным за период
+create or replace function public.recalc_tech_pay(p_from timestamptz, p_to timestamptz) returns int
+language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  if not public.is_staff() then raise exception 'Нет доступа'; end if;
+  update public.orders set tech_percent = public.tech_percent_for(tech_id)
+   where done_at is not null and tech_id is not null
+     and (p_from is null or done_at >= p_from) and (p_to is null or done_at < p_to);
+  get diagnostics n = row_count;
+  return n;
+end $$;
+
 revoke all on function public.claim_owner(text), public.create_invite(text,text,text,uuid), public.accept_invite(uuid,text),
-  public.update_my_name(text), public.set_user(uuid,text,uuid,boolean), public.next_doc_num(text) from public, anon;
+  public.update_my_name(text), public.set_user(uuid,text,uuid,boolean), public.next_doc_num(text),
+  public.tech_pay(timestamptz,timestamptz), public.recalc_tech_pay(timestamptz,timestamptz) from public, anon;
 grant execute on function public.claim_owner(text), public.create_invite(text,text,text,uuid), public.accept_invite(uuid,text),
-  public.update_my_name(text), public.set_user(uuid,text,uuid,boolean), public.next_doc_num(text) to authenticated;
+  public.update_my_name(text), public.set_user(uuid,text,uuid,boolean), public.next_doc_num(text),
+  public.tech_pay(timestamptz,timestamptz), public.recalc_tech_pay(timestamptz,timestamptz) to authenticated;
 grant execute on function public.invite_info(uuid), public.has_owner() to anon, authenticated;
 
 -- Доступ к таблицам через API (строки всё равно фильтруются RLS)
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on public.clinics, public.profiles, public.orders, public.order_prices,
-  public.order_comments, public.order_files, public.invites, public.settings to authenticated;
+  public.order_comments, public.order_files, public.invites, public.settings, public.tech_rates to authenticated;
 grant usage, select on sequence public.order_num_seq to authenticated;
 
 -- ── ХРАНИЛИЩЕ ФАЙЛОВ ─────────────────────────────────────────────────────────
@@ -433,3 +515,9 @@ do $$ begin
   begin alter publication supabase_realtime add table public.order_comments; exception when others then null; end;
   begin alter publication supabase_realtime add table public.order_files; exception when others then null; end;
 end $$;
+
+-- ── ДОЗАПОЛНЕНИЕ ДЛЯ УЖЕ СОЗДАННЫХ ЗАКАЗОВ ──────────────────────────────────
+alter table public.orders disable trigger orders_guard;
+update public.orders set done_at = coalesce(done_at, updated_at), tech_percent = coalesce(tech_percent, public.tech_percent_for(tech_id))
+ where stage >= 13 and done_at is null;
+alter table public.orders enable trigger orders_guard;
