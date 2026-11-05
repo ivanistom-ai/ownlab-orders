@@ -10,7 +10,7 @@
   const BUCKET = 'order-files', MAX_CLOUD_FILE = 50 * 1024 * 1024;
   const TOKEN_KEY = 'ownlab_pending_invite';
   const DEMO_ORDERS = ORDERS.slice();
-  let sb = null, ME = null, CLINICS = [], PEOPLE = [], INVITES = [], LAB = {}, SELLER = {}, TECH_RATES = {};
+  let sb = null, ME = null, CLINICS = [], PEOPLE = [], INVITES = [], LAB = {}, SELLER = {}, TECH_RATES = {}, BOT = null, MY_TG = null;
   const orig = { renderInfoTab, renderTL, renderAnalytics, showView, renderUserMenu, updateCounts, doAction, openModal };
 
   const $ = id => document.getElementById(id);
@@ -46,7 +46,14 @@
   .u-table .set-input{padding:5px 7px;font-size:11px;min-width:0}
   .u-off{opacity:.5}.u-link{font-family:monospace;font-size:10px;color:var(--t3);word-break:break-all}
   .u-scroll{overflow-x:auto}
-  .cloud-badge{font-size:10px;color:var(--green)}`;
+  .cloud-badge{font-size:10px;color:var(--green)}
+  .tl-who{font-size:10px;color:var(--t4);margin:-2px 0 4px}
+  .ev-row{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:11px}
+  .ev-t{font-family:var(--mono);color:var(--t4);white-space:nowrap;font-size:10px;padding-top:1px}
+  .ev-x{color:var(--t2)}.ev-x small{display:block;color:var(--t4);font-size:10px}
+  .tg-ok{color:var(--green);font-weight:600}
+  .bal-neg{color:var(--red)}.bal-pos{color:var(--green)}
+  .bal-panel{background:var(--card2);border-radius:8px;padding:12px;margin:4px 0 10px}`;
   document.head.appendChild(css);
 
   // ── ЭКРАН ВХОДА ─────────────────────────────────────────────────────────────
@@ -200,7 +207,7 @@
   // ── ЗАГРУЗКА ДАННЫХ ─────────────────────────────────────────────────────────
   async function loadAll() {
     const none = Promise.resolve({ data: [] });
-    const [cl, pp, ord, pr, cm, fl, st, inv, tr] = await Promise.all([
+    const [cl, pp, ord, pr, cm, fl, st, inv, tr, evs, tgr] = await Promise.all([
       sb.from('clinics').select('*').order('name'),
       sb.from('profiles').select('*').order('full_name'),
       sb.from('orders').select('*').order('created_at', { ascending: false }),
@@ -210,24 +217,27 @@
       sb.from('settings').select('*'),
       INVITE_ROLES[role()] ? sb.from('invites').select('*').is('used_at', null).order('created_at', { ascending: false }) : none,
       isStaff() || role() === 'tech' ? sb.from('tech_rates').select('*') : none,
+      sb.from('order_events').select('*').order('created_at'),
+      sb.from('user_telegram').select('*'),
     ]);
-    for (const r of [cl, pp, ord, pr, cm, fl, st, inv, tr]) if (r.error) throw r.error;
+    for (const r of [cl, pp, ord, pr, cm, fl, st, inv, tr, evs, tgr]) if (r.error) throw r.error;
+    MY_TG = tgr.data[0] || null;
     TECH_RATES = Object.fromEntries(tr.data.map(x => [x.tech_id, +x.percent]));
     CLINICS = cl.data; PEOPLE = pp.data; INVITES = inv.data;
     const me = PEOPLE.find(p => p.id === ME.id); if (me) ME = me;
     const prices = Object.fromEntries(pr.data.map(x => [x.order_id, +x.price]));
     const by = (arr, k) => arr.reduce((m, x) => ((m[x[k]] = m[x[k]] || []).push(x), m), {});
-    const cms = by(cm.data, 'order_id'), fls = by(fl.data, 'order_id');
+    const cms = by(cm.data, 'order_id'), fls = by(fl.data, 'order_id'), ev = by(evs.data, 'order_id');
     let catalog = null;
-    st.data.forEach(s => { if (s.key === 'lab') LAB = s.value; if (s.key === 'seller') SELLER = s.value; if (s.key === 'catalog') catalog = s.value.items; });
+    st.data.forEach(s => { if (s.key === 'lab') LAB = s.value; if (s.key === 'seller') SELLER = s.value; if (s.key === 'catalog') catalog = s.value.items; if (s.key === 'bot') BOT = s.value; });
     if (Array.isArray(catalog) && catalog.length) SERVICES.splice(0, SERVICES.length, ...catalog.map(i => ({ k: i.k, n: i.n, u: i.u || 'шт', p: +(LAB.prices || {})[i.k] || 0 })));
     Object.assign(SETTINGS, {
       name: ME.full_name || ME.email, initials: initialsOf(ME.full_name || ME.email), role: ROLE_N[ME.role],
       seller: Object.assign({ name: 'OWN Digital Laboratory' }, SELLER), vat: SELLER.vat || 'none',
-      prices: LAB.prices || {}, docNum: LAB.docNum || { nak: 1, sf: 1 }, buyers: LAB.buyers || {},
+      prices: LAB.prices || {}, docNum: Object.assign({ inv: 1, nak: 1, sf: 1 }, LAB.docNum), buyers: LAB.buyers || {},
       techs: techs().map(t => t.full_name), techPercent: LAB.techPercent ?? 30, techRates: {},
     });
-    ORDERS = ord.data.map(r => toOrder(r, prices[r.id], cms[r.id] || [], fls[r.id] || []));
+    ORDERS = ord.data.map(r => Object.assign(toOrder(r, prices[r.id], cms[r.id] || [], fls[r.id] || []), { events: ev[r.id] || [] }));
     DICT.clinic = uniq(CLINICS.map(c => c.name));
     DICT.tech = uniq(techs().map(t => t.full_name));
     DICT.doctor = uniq(doctorsOf().map(d => d.full_name).concat(ORDERS.map(o => o.doctor)));
@@ -265,7 +275,9 @@
   function subscribe() {
     sb.channel('ownlab').on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => reload())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'order_comments' }, () => reload())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_files' }, () => reload()).subscribe();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_files' }, () => reload())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'order_events' }, () => reload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => { if (curView === 'balance') renderBalance(); }).subscribe();
   }
 
   // ── ИНТЕРФЕЙС ПО РОЛИ ───────────────────────────────────────────────────────
@@ -289,20 +301,30 @@
       $('view-settings').after(pg);
     }
     nu.style.display = INVITE_ROLES[r] ? '' : 'none';
+    let nb = document.querySelector('.nav-item[data-view="balance"]');
+    if (!nb) {
+      nb = document.createElement('div'); nb.className = 'nav-item'; nb.dataset.view = 'balance'; nb.textContent = '💳 Расчёты';
+      nb.onclick = () => showView('balance');
+      document.querySelector('.nav-item[data-view="pay"]').after(nb);
+      const pg = document.createElement('div'); pg.id = 'view-balance'; pg.className = 'page';
+      $('view-settings').after(pg);
+    }
+    nb.style.display = canPrice() ? '' : 'none';
   }
 
   window.showView = function (v) {
     if (v === 'analytics' && !canPrice()) v = 'orders';
     if (v === 'pay' && !(isStaff() || role() === 'tech')) v = 'orders';
     if (v === 'users' && !INVITE_ROLES[role()]) v = 'orders';
-    const up = $('view-users');
-    if (v === 'users') {
+    if (v === 'balance' && !canPrice()) v = 'orders';
+    const extra = { users: renderUsers, balance: renderBalance };
+    ['users', 'balance'].forEach(k => $('view-' + k)?.classList.remove('open'));
+    if (extra[v]) {
       orig.showView('settings'); $('view-settings').classList.remove('open');
-      curView = 'users'; up.classList.add('open'); renderUsers(); updateCounts();
-      document.querySelectorAll('.nav-item[data-view]').forEach(el => el.classList.toggle('active', el.dataset.view === 'users'));
+      curView = v; $('view-' + v).classList.add('open'); extra[v](); updateCounts();
+      document.querySelectorAll('.nav-item[data-view]').forEach(el => el.classList.toggle('active', el.dataset.view === v));
       return;
     }
-    if (up) up.classList.remove('open');
     orig.showView(v);
   };
   window.allTechs = () => uniq(techs().map(t => t.full_name).concat(ORDERS.map(o => o.tech)));
@@ -311,12 +333,37 @@
       <div class="pop-item ico" onclick="closePops();showView('settings')">⚙️ Профиль и настройки</div>
       ${INVITE_ROLES[role()] ? `<div class="pop-item ico" onclick="closePops();showView('users')">👥 Пользователи</div>` : ''}
       ${canPrice() ? `<div class="pop-item ico" onclick="closePops();showView('analytics')">📊 Аналитика</div>` : ''}
+      ${canPrice() ? `<div class="pop-item ico" onclick="closePops();showView('balance')">💳 Расчёты</div>` : ''}
       ${isStaff() || role() === 'tech' ? `<div class="pop-item ico" onclick="closePops();showView('pay')">💰 ${role() === 'tech' ? 'Мой заработок' : 'Зарплата'}</div>` : ''}
       <div class="pop-item ico" onclick="closePops();showView('deadlines')">⏱ Сроки</div>
       <div class="pop-item ico" onclick="CLOUD_UI.logout()">🚪 Выйти</div>`;
   };
+  // Среднее время на этапах и срок от создания до получения клиникой — по истории
+  function stageStats(list) {
+    const acc = {}, lead = [];
+    list.forEach(o => {
+      const ev = (o.events || []).filter(e => e.kind !== 'tech');
+      for (let i = 0; i < ev.length - 1; i++) {
+        const s = ev[i].to_stage, d = (new Date(ev[i + 1].created_at) - new Date(ev[i].created_at)) / 36e5;
+        if (s && d >= 0) (acc[s] = acc[s] || []).push(d);
+      }
+      const c = ev.find(e => e.kind === 'created'), done = ev.find(e => e.to_stage >= 13 && e.kind === 'stage');
+      if (c && done) lead.push((new Date(done.created_at) - new Date(c.created_at)) / 36e5);
+    });
+    const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+    return { rows: Object.keys(acc).map(Number).sort((a, b) => a - b).map(s => [STAGES[s - 1].n, avg(acc[s]), acc[s].length]), lead: lead.length ? avg(lead) : null, leadN: lead.length };
+  }
+  const dur = h => h < 1 ? Math.round(h * 60) + ' мин' : h < 48 ? h.toFixed(1).replace('.0', '') + ' ч' : (h / 24).toFixed(1).replace('.0', '') + ' дн.';
   window.renderAnalytics = function () {
     orig.renderAnalytics();
+    if (isStaff()) {
+      const st = stageStats(reportOrders()), mx = Math.max(1, ...st.rows.map(r => r[1]));
+      const card = document.createElement('div'); card.className = 'p-card';
+      card.innerHTML = `<div class="p-card-ttl">⏱ Время на этапах (по истории)${st.lead !== null ? ' · от создания до получения клиникой в среднем ' + dur(st.lead) + ' (' + st.leadN + ' зак.)' : ''}</div>`
+        + (st.rows.length ? st.rows.map(([l, v, n]) => `<div class="bar-row" title="${n} переходов"><span class="bar-lbl">${esc(l)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v / mx * 100)}%"></div></div><span class="bar-val">${dur(v)}</span></div>`).join('')
+          : '<div class="pop-empty">Данные появятся, когда заказы начнут проходить этапы</div>');
+      document.querySelector('#view-analytics .p-grid')?.before(card);
+    }
     if (!isStaff()) document.querySelectorAll('#view-analytics [onclick="openDocModal()"]').forEach(b => b.remove());
   };
 
@@ -333,11 +380,32 @@
         <div class="set-row"><label style="width:90px">Цена за ед.</label><input class="set-input" type="number" min="0" step="100" value="${o.price || 0}" onchange="CLOUD_UI.setOrderPrice('${o.id}',this.value)"> ₽</div>
         ${role() === 'owner' ? `<div class="set-row"><label style="width:90px"></label><button class="set-btn danger" onclick="CLOUD_UI.deleteOrder('${o.id}')">Удалить заказ</button></div>` : ''}`;
     }
+    const evs = (o.events || []).slice().reverse();
+    if (evs.length) h += `<div class="p-card-ttl" style="margin:14px 0 6px">История · ${evs.length}</div>` + evs.slice(0, 30).map(e =>
+      `<div class="ev-row"><span class="ev-t">${fmtDT(e.created_at)}</span><span class="ev-x">${esc(eventText(e))}<small>${esc(e.actor_name || 'система')}${e.actor_role ? ' · ' + ROLE_N[e.actor_role] : ''}</small></span></div>`).join('');
     $('dp-team').innerHTML = h;
   };
   // Кнопки этапов по ролям
+  const fmtDT = t => new Date(t).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  // Когда заказ вошёл в этап n (последний переход) и кто его перевёл
+  function stageEntry(o, n) {
+    const evs = (o.events || []).filter(e => (e.kind === 'stage' && e.to_stage === n) || (e.kind === 'created' && e.to_stage === n));
+    return evs[evs.length - 1];
+  }
+  function eventText(e) {
+    if (e.kind === 'created') return 'Заказ создан' + (e.to_stage > 1 ? ' на этапе ' + e.to_stage : '');
+    if (e.kind === 'tech') return e.info === 'снят' ? 'Техник снят с заказа' : 'Назначен техник: ' + e.info;
+    return (e.to_stage < e.from_stage ? '↩ Возврат на этап ' : 'Этап ') + e.to_stage + ': ' + STAGES[e.to_stage - 1].n;
+  }
   window.renderTL = function (o) {
     orig.renderTL(o);
+    $('dp-tl').querySelectorAll('.tl-item').forEach((it, i) => {
+      const n = i + 1, e = n <= o.stage ? stageEntry(o, n) : null, ts = it.querySelector('.tl-ts');
+      if (!ts) return;
+      if (e) { ts.textContent = (n === o.stage ? 'с ' : '') + fmtDT(e.created_at); ts.title = (e.actor_name || 'система') + (e.actor_role ? ' · ' + ROLE_N[e.actor_role] : ''); }
+      else if (n < o.stage) { ts.textContent = '—'; ts.title = 'Дата не записана (заказ создан до включения истории)'; }
+      if (e?.actor_name) { const w = document.createElement('div'); w.className = 'tl-who'; w.textContent = '👤 ' + e.actor_name; it.querySelector('.tl-row')?.after(w); }
+    });
     const r = role(), deny = isClinic() ? /'(next|needsData)'/ : r === 'tech' ? /'(approved|received)'/ : null;
     if (deny) $('dp-tl').querySelectorAll('.tl-btn').forEach(b => { if (deny.test(b.getAttribute('onclick') || '')) b.remove(); });
   };
@@ -483,6 +551,7 @@
         ${role() === 'tech' ? `<div class="set-row"><label>Ставка</label><span>${TECH_RATES[ME.id] ?? SETTINGS.techPercent ?? 0}% от суммы выполненной работы</span></div>` : ''}
         <div class="set-row"><label></label><button class="set-btn" onclick="saveProfile()">Сохранить</button><button class="set-btn sec" onclick="CLOUD_UI.changePassword()">Сменить пароль</button><button class="set-btn sec" onclick="CLOUD_UI.logout()">Выйти</button></div>
       </div>
+      ${tgCard()}
       ${role() === 'owner' ? sellerCard() : ''}${isStaff() ? priceCard() + payCard() : ''}
       <div class="p-card"><div class="p-card-ttl">Данные</div>
         <div class="set-row"><button class="set-btn sec" onclick="exportCSV()">⬇️ Экспорт заказов в CSV</button>
@@ -538,6 +607,162 @@
     try { const n = await q(sb.rpc('recalc_tech_pay', { p_from: f ? f.toISOString() : null, p_to: t ? t.toISOString() : null })); showToast('Пересчитано', n + ' работ'); renderPay(); }
     catch (e) { err('Не пересчитано', e); }
   };
+
+  // ── УВЕДОМЛЕНИЯ В TELEGRAM ──────────────────────────────────────────────────
+  function tgCard() {
+    const linked = MY_TG?.chat_id;
+    let body;
+    if (!BOT?.username) {
+      body = isStaff()
+        ? `<div class="set-note" style="margin-bottom:10px">Бот ещё не подключён. Нужно один раз: создать бота у @BotFather в Telegram, добавить его токен в Supabase (Edge Functions → Secrets → <b>TELEGRAM_BOT_TOKEN</b>) и нажать кнопку ниже.</div>
+           <button class="set-btn" onclick="CLOUD_UI.setupBot()">Подключить бота</button>`
+        : '<div class="set-note">Лаборатория ещё не подключила Telegram-бота.</div>';
+    } else if (linked) {
+      body = `<div class="set-row"><span class="tg-ok">✓ Подключено</span><span class="set-note" style="margin:0">бот @${esc(BOT.username)}</span></div>
+        <label class="chk"><input type="checkbox"${MY_TG.enabled ? ' checked' : ''} onchange="CLOUD_UI.tgEnable(this.checked)"> Присылать уведомления</label>
+        <div class="set-row" style="margin-top:8px"><button class="set-btn sec" onclick="CLOUD_UI.tgUnlink()">Отвязать Telegram</button>${isStaff() ? '<button class="set-btn sec" onclick="CLOUD_UI.setupBot()">Переподключить бота</button>' : ''}</div>`;
+    } else {
+      body = `<div class="set-row"><button class="set-btn" onclick="CLOUD_UI.tgLink()">Подключить Telegram</button><button class="set-btn sec" onclick="CLOUD_UI.tgRefresh()">Обновить статус</button></div>
+        <div class="set-note">Откроется бот @${esc(BOT.username)} — нажмите в нём «Start», затем вернитесь сюда.</div>`;
+    }
+    const what = { owner: 'новые заказы, согласования, получение работ клиникой, сообщения от клиник', lab_admin: 'новые заказы, согласования, получение работ клиникой, сообщения от клиник', tech: 'назначенные вам заказы, смена этапов, согласование дизайна, сообщения в чате', clinic_admin: 'согласование дизайна, отправка работ, сообщения в чате', doctor: 'согласование дизайна, отправка работы, сообщения в чате' }[role()];
+    return `<div class="p-card"><div class="p-card-ttl">🔔 Уведомления в Telegram</div>${body}<div class="set-note">Приходят: ${what}.</div></div>`;
+  }
+  Object.assign(window.CLOUD_UI, {
+    async setupBot() {
+      const { data: { session } } = await sb.auth.getSession();
+      try {
+        const r = await fetch(CFG.url + '/functions/v1/notify?setup=1', { method: 'POST', headers: { Authorization: 'Bearer ' + session.access_token, apikey: CFG.key } });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) throw new Error(j.error || ('Ошибка ' + r.status + (r.status === 404 ? ': функция notify не развёрнута' : '')));
+        BOT = { username: j.username }; showToast('Бот подключён', '@' + j.username); renderSettings();
+      } catch (e) { err('Бот не подключён', e); }
+    },
+    async tgLink() {
+      try {
+        const code = await q(sb.rpc('tg_link_code'));
+        window.open('https://t.me/' + BOT.username + '?start=' + code, '_blank', 'noopener');
+        showToast('Откройте Telegram', 'Нажмите «Start» у бота, затем «Обновить статус»');
+      } catch (e) { err('Не удалось', e); }
+    },
+    async tgRefresh() { MY_TG = (await q(sb.from('user_telegram').select('*'))).at(0) || null; renderSettings(); showToast(MY_TG?.chat_id ? 'Telegram подключён' : 'Пока не подключено', MY_TG?.chat_id ? '' : 'Нажмите «Start» в боте', MY_TG?.chat_id ? 'success' : 'warning'); },
+    async tgEnable(on) { try { await q(sb.rpc('tg_set_enabled', { p_on: on })); MY_TG.enabled = on; showToast(on ? 'Уведомления включены' : 'Уведомления выключены'); } catch (e) { err('Не сохранено', e); } },
+    async tgUnlink() { if (!confirm('Отвязать Telegram?')) return; try { await q(sb.rpc('tg_unlink')); MY_TG.chat_id = null; renderSettings(); showToast('Telegram отвязан', '', 'warning'); } catch (e) { err('Не удалось', e); } },
+  });
+
+  // ── РАСЧЁТЫ С КЛИНИКАМИ ─────────────────────────────────────────────────────
+  const BAL = { preset: 'ytd', from: '', to: '', open: null };
+  [BAL.from, BAL.to] = presetRange(BAL.preset);
+  let BAL_DATA = [], BAL_DOCS = [], BAL_PAYS = [];
+  const KIND_N = { inv: 'Счёт на оплату', nak: 'Накладная', sf: 'Счёт-фактура' };
+  window.onDocMade = async function (d) {
+    if (!isStaff()) return;
+    const c = CLINICS.find(x => x.name === d.clinic); if (!c) return;
+    const r = await sb.from('documents').insert({ clinic_id: c.id, kind: d.kind, number: String(d.number), doc_date: d.date, total: d.total, vat: d.vat, order_ids: d.orders, title: d.title, html: d.html });
+    if (r.error) err('Документ не сохранён в архив', r.error);
+  };
+  window.CLOUD_UI.setBal = function (k, v) {
+    if (k === 'preset') { BAL.preset = v; if (v !== 'custom') [BAL.from, BAL.to] = presetRange(v); }
+    else { BAL[k] = v; BAL.preset = 'custom'; }
+    renderBalance();
+  };
+  async function renderBalance() {
+    const el = $('view-balance'); if (!el.innerHTML) el.innerHTML = '<div class="page-sub">Загрузка…</div>';
+    try {
+      const [b, d, p] = await Promise.all([
+        q(sb.rpc('clinic_balances', { p_from: BAL.from || null, p_to: BAL.to || null })),
+        q(sb.from('documents').select('id,clinic_id,kind,number,doc_date,total,title').order('doc_date', { ascending: false })),
+        q(sb.from('payments').select('*').order('paid_at', { ascending: false })),
+      ]);
+      BAL_DATA = b; BAL_DOCS = d; BAL_PAYS = p;
+    } catch (e) { el.innerHTML = `<div class="page-ttl">💳 Расчёты</div><div class="p-card">Не удалось загрузить: ${esc(e.message || e)}</div>`; return; }
+    if (curView !== 'balance') return;
+    if (role() === 'clinic_admin') BAL.open = ME.clinic_id;
+    const S = k => BAL_DATA.reduce((x, r) => x + +r[k], 0), debt = S('closing');
+    const sel = `<select class="set-input" onchange="CLOUD_UI.setBal('preset',this.value)">${Object.entries(PRESETS).map(([v, l]) => `<option value="${v}"${BAL.preset === v ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
+    const cls = n => n > 0.004 ? 'bal-neg' : n < -0.004 ? 'bal-pos' : '';
+    const rows = BAL_DATA.map(r => `<tr class="rep-g" onclick="CLOUD_UI.balOpen('${r.clinic_id}')"><td>${BAL.open === r.clinic_id ? '▾' : '▸'} ${esc(r.name)}</td><td class="n">${rub(+r.opening)}</td><td class="n">${rub(+r.accrued)}</td><td class="n">${rub(+r.paid)}</td><td class="n ${cls(+r.closing)}"><b>${rub(+r.closing)}</b></td><td class="n">${r.last_payment ? ruDT(r.last_payment) : '—'}</td></tr>`
+      + (BAL.open === r.clinic_id ? `<tr class="rep-d"><td colspan="6">${clinicPanel(r)}</td></tr>` : '')).join('');
+    el.innerHTML = `<div class="page-ttl">💳 Расчёты с клиниками</div>
+      <div class="page-sub">Начисление — выполненная работа на дату получения клиникой (этап 13). Сальдо больше нуля — долг клиники перед лабораторией.</div>
+      <div class="p-card"><div class="p-card-ttl">Период</div><div class="r-grid">
+        <label>Период${sel}</label>
+        <label>С даты<input type="date" class="set-input" value="${BAL.from}" onchange="CLOUD_UI.setBal('from',this.value)"></label>
+        <label>По дату<input type="date" class="set-input" value="${BAL.to}" onchange="CLOUD_UI.setBal('to',this.value)"></label></div>
+        <div class="r-actions"><button class="set-btn sec" onclick="CLOUD_UI.balCSV()">⬇️ Выгрузить в Excel</button></div></div>
+      ${isStaff() ? `<div class="kpi-row">
+        <div class="kpi"><div class="kn" style="color:var(--org)">${rub(S('accrued'))}</div><div class="kl">Начислено за период</div></div>
+        <div class="kpi"><div class="kn" style="color:var(--green)">${rub(S('paid'))}</div><div class="kl">Оплачено за период</div></div>
+        <div class="kpi"><div class="kn" style="color:${debt > 0 ? 'var(--red)' : 'var(--green)'}">${rub(debt)}</div><div class="kl">Долг клиник на конец периода</div></div>
+        <div class="kpi"><div class="kn">${BAL_DATA.filter(r => +r.closing > 0.004).length}</div><div class="kl">Клиник с долгом</div></div></div>` : ''}
+      <div class="p-card"><div style="overflow-x:auto"><table class="rep"><thead><tr><th>Клиника</th><th class="n">Сальдо на начало</th><th class="n">Начислено</th><th class="n">Оплачено</th><th class="n">Сальдо на конец</th><th class="n">Посл. оплата</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6" class="pop-empty">Клиник нет</td></tr>'}</tbody>
+        ${BAL_DATA.length > 1 ? `<tfoot><tr><td>Итого</td><td class="n">${rub(S('opening'))}</td><td class="n">${rub(S('accrued'))}</td><td class="n">${rub(S('paid'))}</td><td class="n">${rub(debt)}</td><td></td></tr></tfoot>` : ''}</table></div></div>`;
+  }
+  function clinicPanel(r) {
+    const docs = BAL_DOCS.filter(d => d.clinic_id === r.clinic_id), pays = BAL_PAYS.filter(p => p.clinic_id === r.clinic_id);
+    const paidBy = id => pays.filter(p => p.document_id === id).reduce((x, p) => x + +p.amount, 0);
+    return `<div class="bal-panel" onclick="event.stopPropagation()">
+      <div class="r-actions" style="margin-bottom:10px"><button class="set-btn" onclick="CLOUD_UI.actSverki('${r.clinic_id}')">📄 Акт сверки за период</button></div>
+      ${isStaff() ? `<div class="p-card-ttl">Внести оплату</div><div class="set-row">
+        <input class="set-input" id="pay-sum" type="number" min="0.01" step="0.01" placeholder="Сумма, ₽" style="flex:0 0 130px;min-width:0">
+        <input class="set-input" id="pay-date" type="date" value="${iso(new Date())}" style="flex:0 0 150px;min-width:0">
+        <select class="set-input" id="pay-method" style="flex:0 0 150px;min-width:0"><option>безналичный</option><option>наличные</option><option>карта</option></select>
+        <select class="set-input" id="pay-doc" style="flex:1 1 180px"><option value="">— без привязки к документу —</option>${docs.filter(d => d.kind !== 'sf').map(d => `<option value="${d.id}">${KIND_N[d.kind]} № ${esc(d.number)} от ${ruDT(d.doc_date)} · ${rub(+d.total)}</option>`).join('')}</select>
+        <input class="set-input" id="pay-note" placeholder="Комментарий (п/п №…)" style="flex:1 1 160px">
+        <button class="set-btn" onclick="CLOUD_UI.addPayment('${r.clinic_id}')">＋ Добавить</button></div>` : ''}
+      <div class="p-card-ttl" style="margin-top:8px">Документы · ${docs.length}</div>
+      ${docs.length ? `<table class="rep-in">${docs.map(d => `<tr onclick="CLOUD_UI.openStored('${d.id}')"><td>${ruDT(d.doc_date)}</td><td>${KIND_N[d.kind]} № ${esc(d.number)}</td><td class="n">${rub(+d.total)}</td><td>${d.kind === 'sf' ? '' : (paidBy(d.id) >= +d.total - 0.004 ? '<span class="tg-ok">оплачен</span>' : paidBy(d.id) > 0 ? 'частично · ' + rub(paidBy(d.id)) : '<span class="bal-neg">не оплачен</span>')}</td><td>открыть →</td></tr>`).join('')}</table>`
+        : '<div class="set-note">Документы появятся здесь, когда вы сформируете счёт, накладную или счёт-фактуру в «Аналитике».</div>'}
+      <div class="p-card-ttl" style="margin-top:12px">Оплаты · ${pays.length}</div>
+      ${pays.length ? `<table class="rep-in">${pays.map(p => `<tr><td>${ruDT(p.paid_at)}</td><td class="n"><b>${rub(+p.amount)}</b></td><td>${esc(p.method)}</td><td>${esc(p.note || '')}${p.document_id ? ' · ' + esc((d => d ? KIND_N[d.kind] + ' № ' + d.number : '')(BAL_DOCS.find(d => d.id === p.document_id))) : ''}</td><td>${isStaff() ? `<button class="picked-del" title="Удалить оплату" onclick="CLOUD_UI.delPayment('${p.id}')">✕</button>` : ''}</td></tr>`).join('')}</table>` : '<div class="set-note">Оплат пока нет</div>'}
+    </div>`;
+  }
+  Object.assign(window.CLOUD_UI, {
+    balOpen(id) { if (role() === 'clinic_admin') return; BAL.open = BAL.open === id ? null : id; renderBalance(); },
+    async addPayment(cid) {
+      const amount = +v('pay-sum'); if (!(amount > 0)) return showToast('Укажите сумму', '', 'error');
+      try {
+        await q(sb.from('payments').insert({ clinic_id: cid, amount, paid_at: v('pay-date') || iso(new Date()), method: v('pay-method'), note: v('pay-note'), document_id: v('pay-doc') || null }));
+        showToast('Оплата внесена', rub(amount) + ' · ' + (clinicName(cid) || '')); renderBalance();
+      } catch (e) { err('Оплата не внесена', e); }
+    },
+    async delPayment(id) {
+      if (!confirm('Удалить эту оплату?')) return;
+      try { await q(sb.from('payments').delete().eq('id', id)); showToast('Оплата удалена', '', 'warning'); renderBalance(); } catch (e) { err('Не удалось', e); }
+    },
+    async openStored(id) {
+      try { const d = (await q(sb.from('documents').select('title,html').eq('id', id))).at(0); if (d) showStoredDoc(d.title, d.html); }
+      catch (e) { err('Документ не открылся', e); }
+    },
+    balCSV() {
+      const rows = [['Клиника', 'Сальдо на начало', 'Начислено', 'Оплачено', 'Сальдо на конец', 'Последняя оплата']]
+        .concat(BAL_DATA.map(r => [r.name, num2(+r.opening), num2(+r.accrued), num2(+r.paid), num2(+r.closing), r.last_payment ? ruDT(r.last_payment) : '']));
+      downloadCSV(rows, 'ownlab-raschety-' + (BAL.from || '') + '_' + (BAL.to || '') + '.csv'); showToast('Выгружено', 'CSV для Excel');
+    },
+    async actSverki(cid) {
+      try {
+        const rows = await q(sb.rpc('clinic_ledger', { p_clinic: cid, p_from: BAL.from || null, p_to: BAL.to || null }));
+        const b = BAL_DATA.find(x => x.clinic_id === cid), s = SETTINGS.seller, c = clinicName(cid) || '';
+        const open = +b.opening, deb = rows.reduce((x, r) => x + +r.debit, 0), cred = rows.reduce((x, r) => x + +r.credit, 0), close = open + deb - cred;
+        const per = (BAL.from ? ruDT(BAL.from) : 'начала работы') + ' — ' + (BAL.to ? ruDT(BAL.to) : ruDT(new Date()));
+        const side = n => n >= 0 ? [money(n), ''] : ['', money(-n)];
+        const title = 'Акт сверки · ' + c + ' · ' + per;
+        openDocWindow(title, `<h1>Акт сверки взаимных расчётов</h1>
+          <p>за период: ${per}<br>между <b>${esc(s.name || '')}</b> и <b>${esc(c)}</b></p>
+          <p class="small">Мы, нижеподписавшиеся, составили настоящий акт сверки в том, что состояние взаимных расчётов по данным учёта следующее:</p>
+          <table><tr><th colspan="4">По данным ${esc(s.name || 'лаборатории')}, руб.</th></tr>
+            <tr><th style="width:90px">Дата</th><th>Документ</th><th style="width:110px">Дебет</th><th style="width:110px">Кредит</th></tr>
+            <tr class="g"><td colspan="2">Сальдо начальное</td><td class="r">${side(open)[0]}</td><td class="r">${side(open)[1]}</td></tr>
+            ${rows.map(r => `<tr><td>${ruDT(r.d)}</td><td>${r.kind === 'accrual' ? 'Выполнены работы: ' : ''}${esc(r.ref)}</td><td class="r">${+r.debit ? money(+r.debit) : ''}</td><td class="r">${+r.credit ? money(+r.credit) : ''}</td></tr>`).join('')}
+            <tr class="g"><td colspan="2">Обороты за период</td><td class="r">${money(deb)}</td><td class="r">${money(cred)}</td></tr>
+            <tr class="g"><td colspan="2">Сальдо конечное</td><td class="r">${side(close)[0]}</td><td class="r">${side(close)[1]}</td></tr></table>
+          <p>По данным ${esc(s.name || 'лаборатории')} на ${BAL.to ? ruDT(BAL.to) : ruDT(new Date())} ${Math.abs(close) < 0.005 ? '<b>задолженность отсутствует</b>' : `задолженность в пользу <b>${esc(close > 0 ? (s.name || 'лаборатории') : c)}</b> составляет <b>${money(Math.abs(close))} руб.</b> (${rubWords(Math.abs(close))})`}.</p>
+          <div class="sign"><div>От ${esc(s.name || 'лаборатории')}<br><br>Руководитель <span class="ln"></span> / ${esc(s.head || '')} /<br><br>Главный бухгалтер <span class="ln"></span> / ${esc(s.acc || '')} /<br><br>М.П.</div>
+          <div>От ${esc(c)}<br><br>Руководитель <span class="ln"></span> / <span class="ln"></span> /<br><br>Главный бухгалтер <span class="ln"></span> / <span class="ln"></span> /<br><br>М.П.</div></div>`);
+      } catch (e) { err('Акт не сформирован', e); }
+    },
+  });
 
   // ── ПОЛЬЗОВАТЕЛИ И ПРИГЛАШЕНИЯ ──────────────────────────────────────────────
   const inviteLink = t => location.origin + location.pathname + '?invite=' + t;

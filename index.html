@@ -2,7 +2,15 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#E8651A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="OWNLAB">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
 <title>OWN Digital Laboratory — Система заказов</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -353,13 +361,50 @@ button,input,select,textarea{font-family:var(--font)}
 .doc-viewer iframe{flex:1;border:none;background:#fff;border-radius:0 0 10px 10px}
 .modal-btn:disabled{opacity:.4;cursor:not-allowed}
 .set-note{font-size:10px;color:var(--t4);margin-top:6px;line-height:1.5}
+
+/* ── МОБИЛЬНАЯ ВЕРСИЯ ───────────────────────────────────────────────────────── */
+.hdr-menu{display:none;background:none;border:0;font-size:22px;line-height:1;padding:4px 8px 4px 0;cursor:pointer;color:var(--t1)}
+.nav-back{display:none}
+@media (max-width:820px){
+  :root{--h:54px}
+  .hdr{padding:0 12px;padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
+  .hdr-menu{display:block}
+  .logo-sub{display:none}
+  .env-badge{font-size:8px;padding:2px 6px;letter-spacing:.5px;max-width:42vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .layout{grid-template-columns:1fr}
+  .sidebar{position:fixed;top:var(--h);left:0;bottom:0;width:min(300px,84vw);z-index:300;transform:translateX(-105%);transition:transform .22s ease;box-shadow:4px 0 24px rgba(0,0,0,.12)}
+  body.nav-open .sidebar{transform:none}
+  body.nav-open .nav-back{display:block;position:fixed;inset:var(--h) 0 0 0;background:rgba(0,0,0,.35);z-index:250}
+  .detail-panel{width:100%;left:0;border-left:0}
+  .topbar{flex-wrap:wrap;padding:12px 12px 0;gap:10px}
+  .search-wrap{flex:1 1 100%;min-width:0;max-width:none}
+  .stat-chips{width:100%;overflow-x:auto}
+  .stat-chip{flex:1;min-width:0}
+  .orders-sec{padding:12px}
+  .c-top{flex-wrap:wrap}
+  .c-type{order:3;flex-basis:100%}
+  .c-bot{flex-wrap:wrap;gap:6px}
+  .page{padding:14px 12px 28px}
+  .p-grid{grid-template-columns:1fr}
+  .modal-overlay{align-items:stretch}
+  .modal{width:100%;max-height:100%;height:100%;border-radius:0;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+  .form-row{grid-template-columns:1fr}
+  .modal-actions{flex-wrap:wrap}.modal-actions .modal-btn{flex:1 1 auto}
+  input,select,textarea{font-size:16px!important}
+  .toast{left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));min-width:0}
+  .doc-viewer{padding:0}
+  .set-row label{width:auto!important}
+  .kpi .kn{font-size:18px}
+  .tl-actions{flex-wrap:wrap}
+}
 </style>
 </head>
 <body>
 
 <!-- HEADER -->
 <header class="hdr">
-  <div style="display:flex;align-items:baseline">
+  <div style="display:flex;align-items:center">
+    <button class="hdr-menu" onclick="toggleNav()" aria-label="Меню">☰</button>
     <span class="logo-own">OWN</span>
     <span class="logo-sub">Digital Laboratory</span>
   </div>
@@ -382,7 +427,8 @@ button,input,select,textarea{font-family:var(--font)}
 <div class="layout">
 
   <!-- SIDEBAR -->
-  <aside class="sidebar">
+  <div class="nav-back" onclick="toggleNav(false)"></div>
+  <aside class="sidebar" onclick="if(event.target.closest('.nav-item,.btn-new'))toggleNav(false)">
     <div class="sb-block">
       <button class="btn-new" onclick="openModal()"><span style="font-size:16px">＋</span> Новый заказ</button>
       <span class="s-lbl">По статусу</span>
@@ -1117,7 +1163,7 @@ function renderAnalytics(){
       <div class="r-actions">
         <button class="set-btn sec" onclick="exportReportCSV()">⬇️ Выгрузить в Excel</button>
         <button class="set-btn sec" onclick="printReport()">🖨 Печать / PDF</button>
-        <button class="set-btn" onclick="openDocModal()">🧾 Накладная и счёт-фактура</button>
+        <button class="set-btn" onclick="openDocModal()">🧾 Счёт, накладная, счёт-фактура</button>
         <button class="set-btn sec" onclick="resetReport()">Сбросить</button>
       </div>
     </div>
@@ -1173,6 +1219,11 @@ function openDocWindow(title,body){
   document.getElementById('dv-frame').srcdoc=docHtml;
   closeDoc(); document.getElementById('docViewer').classList.add('open');
 }
+function showStoredDoc(title,html){
+  docTitle=title; docHtml=html;
+  document.getElementById('dv-title').textContent=title; document.getElementById('dv-frame').srcdoc=html;
+  document.getElementById('docViewer').classList.add('open');
+}
 function closeViewer(){document.getElementById('docViewer').classList.remove('open');}
 function printDoc(){document.getElementById('dv-frame').contentWindow.print();}
 function downloadDoc(){
@@ -1210,12 +1261,12 @@ function rubWords(n){
 }
 const VAT_OPTS=[['none','Без НДС'],['5','5%'],['7','7%'],['10','10%'],['20','20%'],['22','22%']];
 function vatRate(){return SETTINGS.vat==='none'?0:+SETTINGS.vat;}
-const DOC={clinic:'',onlyDone:true,patient:true,date:'',nak:'',sf:''};
+const DOC={clinic:'',onlyDone:true,patient:true,date:'',inv:'',nak:'',sf:''};
 function docOrders(){return reportOrders().filter(o=>o.clinic===DOC.clinic&&(!DOC.onlyDone||isDone(o)));}
 function openDocModal(){
   const clinics=uniq(reportOrders().map(o=>o.clinic));
   if(!clinics.length){showToast('Нет заказов','В выбранном периоде нет заказов','warning');return;}
-  Object.assign(DOC,{clinic:R.clinic&&clinics.includes(R.clinic)?R.clinic:clinics[0],date:iso(new Date()),nak:String(SETTINGS.docNum.nak),sf:String(SETTINGS.docNum.sf)});
+  Object.assign(DOC,{clinic:R.clinic&&clinics.includes(R.clinic)?R.clinic:clinics[0],date:iso(new Date()),inv:String(SETTINGS.docNum.inv||1),nak:String(SETTINGS.docNum.nak||1),sf:String(SETTINGS.docNum.sf||1)});
   renderDocModal(); document.getElementById('docOverlay').classList.add('open');
 }
 function closeDoc(){document.getElementById('docOverlay').classList.remove('open');}
@@ -1223,7 +1274,7 @@ function saveDocFields(){
   const v=id=>document.getElementById(id)?.value.trim()??'';
   if(!document.getElementById('d-inn'))return;
   SETTINGS.buyers[DOC.clinic]={inn:v('d-inn'),kpp:v('d-kpp'),addr:v('d-addr')};
-  Object.assign(DOC,{nak:v('d-nak'),sf:v('d-sf'),date:v('d-date')});
+  Object.assign(DOC,{inv:v('d-inv'),nak:v('d-nak'),sf:v('d-sf'),date:v('d-date')});
   saveSettings();
 }
 function docSet(k,v){saveDocFields();DOC[k]=v;renderDocModal();}
@@ -1231,7 +1282,7 @@ function renderDocModal(){
   const clinics=uniq(reportOrders().map(o=>o.clinic)), b=SETTINGS.buyers[DOC.clinic]||{}, items=docOrders();
   const sum=items.reduce((s,o)=>s+amt(o),0), r=vatRate(), s=SETTINGS.seller;
   document.getElementById('docModal').innerHTML=`
-    <div class="modal-title">🧾 Накладная и счёт-фактура</div>
+    <div class="modal-title">🧾 Документы для клиники</div>
     <div class="modal-sub">Период отчёта: ${periodTxt()}${filtersTxt()?' · '+esc(filtersTxt()):''}</div>
     <div class="form-sec-title">Покупатель</div>
     <div class="form-group"><label class="form-label">Клиника</label><select class="form-select" onchange="docSet('clinic',this.value)">${clinics.map(c=>`<option${c===DOC.clinic?' selected':''}>${esc(c)}</option>`).join('')}</select></div>
@@ -1243,10 +1294,13 @@ function renderDocModal(){
     <div class="form-div"></div>
     <div class="form-sec-title">Документ</div>
     <div class="form-row">
+      <div class="form-group"><label class="form-label">№ счёта на оплату</label><input class="form-input" id="d-inv" value="${esc(DOC.inv)}"></div>
+      <div class="form-group"><label class="form-label">Дата документов</label><input class="form-input" id="d-date" type="date" value="${DOC.date}"></div>
+    </div>
+    <div class="form-row">
       <div class="form-group"><label class="form-label">№ накладной</label><input class="form-input" id="d-nak" value="${esc(DOC.nak)}"></div>
       <div class="form-group"><label class="form-label">№ счёт-фактуры</label><input class="form-input" id="d-sf" value="${esc(DOC.sf)}"></div>
     </div>
-    <div class="form-group"><label class="form-label">Дата документов</label><input class="form-input" id="d-date" type="date" value="${DOC.date}"></div>
     <label class="chk"><input type="checkbox"${DOC.onlyDone?' checked':''} onchange="docSet('onlyDone',this.checked)"> Только завершённые заказы</label>
     <label class="chk"><input type="checkbox"${DOC.patient?' checked':''} onchange="docSet('patient',this.checked)"> Указывать пациента в наименовании</label>
     <div class="doc-sum">Заказов: <b>${items.length}</b> · единиц: <b>${items.reduce((x,o)=>x+(+o.units||0),0)}</b> · сумма: <b>${rub(sum)}</b> · ${r?'в т.ч. НДС '+r+'%: '+rub(sum*r/(100+r)):'без НДС'}</div>
@@ -1254,6 +1308,7 @@ function renderDocModal(){
     ${items.length?'':'<div class="doc-warn">Нет заказов для этой клиники с выбранными условиями.</div>'}
     <div class="modal-actions">
       <button class="modal-btn cancel" onclick="closeDoc()">Закрыть</button>
+      <button class="modal-btn primary" onclick="makeDoc('inv')"${items.length?'':' disabled'}>Счёт на оплату →</button>
       <button class="modal-btn primary" onclick="makeDoc('nak')"${items.length?'':' disabled'}>Накладная →</button>
       <button class="modal-btn primary" onclick="makeDoc('sf')"${items.length?'':' disabled'}>Счёт-фактура →</button>
     </div>`;
@@ -1277,7 +1332,25 @@ function makeDoc(kind){
   const bank=s.rs?`, р/с ${esc(s.rs)} в ${B(s.bank)}, БИК ${B(s.bik)}, к/с ${B(s.ks)}`:'';
   const buyer=`${esc(DOC.clinic)}, ИНН ${B(b.inn)}${b.kpp?', КПП '+esc(b.kpp):''}, ${B(b.addr)}`;
   let title, body;
-  if(kind==='nak'){
+  if(kind==='inv'){
+    const n=DOC.inv; title='Счёт на оплату № '+n+' от '+dt;
+    body=`<table><tr><td colspan="2" style="width:55%">${B(s.bank)}<br><span class="small">Банк получателя</span></td><td>БИК</td><td>${B(s.bik)}</td></tr>
+      <tr><td colspan="2"></td><td>Сч. №</td><td>${B(s.ks)}</td></tr>
+      <tr><td>ИНН ${B(s.inn)}</td><td>КПП ${B(s.kpp)}</td><td rowspan="2">Сч. №</td><td rowspan="2">${B(s.rs)}</td></tr>
+      <tr><td colspan="2">${B(s.name)}<br><span class="small">Получатель</span></td></tr></table>
+    <h1>Счёт на оплату № ${esc(n)} от ${dt}</h1>
+    <table class="nb"><tr><td style="width:140px">Поставщик<br>(исполнитель):</td><td><b>${seller}</b></td></tr>
+    <tr><td>Покупатель<br>(заказчик):</td><td><b>${buyer}</b></td></tr>
+    <tr><td>Основание:</td><td>Заказы-наряды ${items.map(o=>esc(o.num)).join(', ')}</td></tr></table><br>
+    <table><tr><th>№</th><th>Работы, услуги</th><th>Кол-во</th><th>Ед.</th><th>Цена</th><th>Сумма</th></tr>
+    ${L.map((l,i)=>`<tr><td class="c">${i+1}</td><td>${esc(l.name)}</td><td class="r">${l.qty}</td><td class="c">шт</td><td class="r">${money(l.sum/(l.qty||1))}</td><td class="r">${money(l.sum)}</td></tr>`).join('')}</table>
+    <table class="nb" style="width:auto;margin-left:auto"><tr><td class="r"><b>Итого:</b></td><td class="r"><b>${money(tot('sum'))}</b></td></tr>
+    <tr><td class="r"><b>${r?'В том числе НДС '+r+'%:':'Без налога (НДС)'}</b></td><td class="r"><b>${r?money(tot('vat')):'—'}</b></td></tr>
+    <tr><td class="r"><b>Всего к оплате:</b></td><td class="r"><b>${money(tot('sum'))}</b></td></tr></table>
+    <p>Всего наименований ${L.length}, на сумму ${money(tot('sum'))} руб.<br><b>${rubWords(tot('sum'))}</b></p>
+    <p class="small">Оплата данного счёта означает согласие с условиями выполнения работ. Счёт действителен к оплате в течение 5 банковских дней.</p>
+    <div class="sign"><div>Руководитель <span class="ln"></span> / ${B(s.head)} /</div><div>Бухгалтер <span class="ln"></span> / ${B(s.acc)} /</div></div>`;
+  } else if(kind==='nak'){
     const n=DOC.nak; title='Накладная № '+n+' от '+dt;
     body=`<h1>Товарная накладная № ${esc(n)} от ${dt}</h1>
     <table class="nb"><tr><td style="width:140px">Поставщик:</td><td><b>${seller}${bank}</b></td></tr>
@@ -1317,7 +1390,8 @@ function makeDoc(kind){
   }
   openDocWindow(title,body);
   SETTINGS.docNum[kind]=Math.max(+SETTINGS.docNum[kind]||1,(parseInt(DOC[kind])||0)+1); saveSettings();
-  showToast((kind==='nak'?'Накладная':'Счёт-фактура')+' сформирована','№ '+DOC[kind]+' · '+DOC.clinic);
+  if(window.onDocMade)onDocMade({kind,number:DOC[kind],date:DOC.date||iso(new Date()),clinic:DOC.clinic,total:tot('sum'),vat:tot('vat'),orders:items.map(o=>o.id),title,html:docHtml});
+  showToast({inv:'Счёт на оплату',nak:'Накладная',sf:'Счёт-фактура'}[kind]+' сформирован'+(kind==='inv'?'':'а'),'№ '+DOC[kind]+' · '+DOC.clinic);
 }
 
 function searchFor(q){setFilter({status:'all',tech:'all',urgent:false,search:q});}
@@ -1726,11 +1800,11 @@ document.addEventListener('keydown',e=>{
   if(e.key==='/'&&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){e.preventDefault();showView('orders');document.getElementById('searchInput').focus();}
 });
 
+function toggleNav(on){document.body.classList.toggle('nav-open',on);}
 // ── СТАРТ ─────────────────────────────────────────────────────────────────────
 applySettings();
 renderOrders();
-openDetail('o1');
-switchTab('timeline', document.querySelectorAll('.det-tab')[1]);
+if(innerWidth>820){openDetail('o1');switchTab('timeline', document.querySelectorAll('.det-tab')[1]);}
 </script>
 <script src="config.js"></script>
 <script src="cloud.js"></script>
