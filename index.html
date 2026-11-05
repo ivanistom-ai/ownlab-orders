@@ -323,6 +323,29 @@ button,input,select,textarea{font-family:var(--font)}
 .tech-tag button{background:none;border:none;color:var(--t4);cursor:pointer;font-size:11px}
 .tech-tag button:hover{color:var(--red)}
 @media (max-width:1100px){.dl-row{grid-template-columns:max-content max-content minmax(0,1fr)}.dl-row .dl-tech,.dl-row .bar-track{display:none}}
+.r-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px 12px;margin-bottom:12px}
+.r-grid label{display:flex;flex-direction:column;gap:4px;font-size:10px;color:var(--t3);font-weight:600}
+.r-grid .set-input{min-width:0;width:100%}
+.r-actions{display:flex;flex-wrap:wrap;gap:8px}
+.rep{width:100%;border-collapse:collapse;font-size:12px}
+.rep th{text-align:left;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--t4);padding:6px 8px;border-bottom:1px solid var(--border);font-weight:700}
+.rep td{padding:8px;border-bottom:1px solid var(--border)}
+.rep .n{text-align:right;font-family:var(--mono);white-space:nowrap}
+.rep-g{cursor:pointer}.rep-g:hover td{background:var(--card2)}
+.rep tfoot td{font-weight:700;border-top:2px solid var(--border2);border-bottom:none}
+.rep-d>td{background:var(--card2);padding:0 0 0 18px}
+.rep-in{width:100%;border-collapse:collapse;font-size:11px}
+.rep-in td{padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
+.rep-in tr{cursor:pointer}.rep-in tr:hover td{background:var(--card3)}
+.share{display:inline-block;height:6px;background:linear-gradient(90deg,var(--org),#FF9500);border-radius:3px;vertical-align:middle;margin-right:6px}
+.doc-sum{background:var(--org-d);border:1px solid var(--org-g);border-radius:6px;padding:10px 12px;font-size:12px;margin:10px 0}
+.doc-warn{color:var(--red);font-size:11px;margin:6px 0;line-height:1.5}
+.chk{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t2);margin:6px 0;cursor:pointer}
+.doc-viewer{display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.55);padding:20px;flex-direction:column}
+.doc-viewer.open{display:flex}
+.dv-bar{display:flex;gap:8px;align-items:center;background:var(--card);padding:10px 14px;border-radius:10px 10px 0 0;font-size:13px}
+.doc-viewer iframe{flex:1;border:none;background:#fff;border-radius:0 0 10px 10px}
+.modal-btn:disabled{opacity:.4;cursor:not-allowed}
 .set-note{font-size:10px;color:var(--t4);margin-top:6px;line-height:1.5}
 </style>
 </head>
@@ -486,7 +509,7 @@ button,input,select,textarea{font-family:var(--font)}
     <div class="form-div"></div>
     <div class="form-sec-title">Работа</div>
     <div class="form-group"><label class="form-label">Тип работы *</label>
-      <select class="form-select" id="f-type">
+      <select class="form-select" id="f-type" onchange="fillPrice()">
         <option value="">— Выберите тип —</option>
         <option value="veneers_emax">Виниры (е.мах / фельспат)</option>
         <option value="crown_zirconia">Коронки (цирконий)</option>
@@ -498,8 +521,12 @@ button,input,select,textarea{font-family:var(--font)}
       </select>
     </div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Количество единиц *</label><input class="form-input" id="f-units" type="number" min="1" placeholder="напр. 6"></div>
+      <div class="form-group"><label class="form-label">Количество единиц *</label><input class="form-input" id="f-units" type="number" min="1" placeholder="напр. 6" oninput="updSum()"></div>
       <div class="form-group"><label class="form-label">Оттенок (Vita/BL)</label><input class="form-input" id="f-shade" placeholder="напр. A2, BL1"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Цена за ед., ₽</label><input class="form-input" id="f-price" type="number" min="0" step="100" placeholder="из прайса" oninput="updSum()"></div>
+      <div class="form-group"><label class="form-label">Сумма заказа</label><div class="form-input" id="f-sum" style="background:var(--card2)">—</div></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Зубы</label><input class="form-input" id="f-teeth" placeholder="напр. 11,12,13,21,22,23"></div>
@@ -541,6 +568,16 @@ button,input,select,textarea{font-family:var(--font)}
       <button class="modal-btn primary" onclick="submitOrder()">Создать заказ →</button>
     </div>
   </div>
+</div>
+
+<div class="modal-overlay" id="docOverlay" onclick="if(event.target===this)closeDoc()"><div class="modal" id="docModal" onclick="event.stopPropagation()"></div></div>
+
+<div class="doc-viewer" id="docViewer">
+  <div class="dv-bar"><b id="dv-title"></b><span style="flex:1"></span>
+    <button class="set-btn" onclick="printDoc()">🖨 Печать / PDF</button>
+    <button class="set-btn sec" onclick="downloadDoc()">⬇️ Скачать</button>
+    <button class="set-btn sec" onclick="closeViewer()">✕ Закрыть</button></div>
+  <iframe id="dv-frame" title="Документ"></iframe>
 </div>
 
 <!-- TOAST -->
@@ -594,8 +631,44 @@ let ORDERS=[
     files:[{n:'scan.stl',i:'🦷'},{n:'xray.jpg',i:'📸'}],comments:[]},
 ];
 
+// ── ПРАЙС И ИСТОРИЯ ЗАКАЗОВ ───────────────────────────────────────────────────
+const SERVICES=[
+  {k:'veneers_emax',n:'Винир (е.мах / фельспат)',p:25000},
+  {k:'crown_zirconia',n:'Коронка (цирконий)',p:18000},
+  {k:'crown_emax',n:'Коронка (е.мах)',p:20000},
+  {k:'bridge',n:'Мостовидный протез (за ед.)',p:16000},
+  {k:'implant_crown',n:'Имплант-корона',p:30000},
+  {k:'full_mouth',n:'Полная реставрация (за ед.)',p:22000},
+  {k:'temp',n:'Временная конструкция (ПММА)',p:5000},
+];
+const DEMO_META={o1:['veneers_emax',-12],o2:['crown_zirconia',-3],o3:['bridge',-6],o4:['veneers_emax',-14],o5:['full_mouth',-20],o6:['implant_crown',-1]};
+ORDERS.forEach(o=>{const [k,c]=DEMO_META[o.id];o.svc=k;o.price=SERVICES.find(s=>s.k===k).p;o.cr=dIn(c);});
+// Завершённые демо-заказы за последние ~7 месяцев, чтобы отчётам было что показать
+function genHistory(){
+  let seed=7; const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647, pick=a=>a[Math.floor(rnd()*a.length)];
+  const clinics=[['Клиника Иванова И.И.','Иванов И.И.'],['Дент Плюс','Петренко А.А.'],['Стомасервис','Захаров П.В.'],['Смайл Клиник','Горина С.В.'],['Дент Плюс','Соколова Е.Н.']];
+  const techs=['Артём К.','Мария В.','Дмитрий Н.'];
+  const names=['Андреев П.С.','Белова О.Н.','Васильев И.Г.','Громова А.Д.','Денисов К.М.','Егорова Т.В.','Жуков С.А.','Зайцева Л.П.','Ильин Р.О.','Комарова Н.Е.','Лебедев А.А.','Морозова В.С.','Никитин Д.И.','Осипова Е.К.','Павлов М.Ю.','Романова Ю.А.','Смирнов Г.Б.','Тихонова И.Р.'];
+  const range={veneers_emax:[2,10],crown_zirconia:[1,4],crown_emax:[1,3],bridge:[3,4],implant_crown:[1,2],full_mouth:[10,14],temp:[2,8]};
+  const out=[];
+  for(let i=0;i<36;i++){
+    const ago=205-Math.floor(i*5.5)-Math.floor(rnd()*3);
+    const [clinic,doctor]=pick(clinics), s=pick(SERVICES), [a,b]=range[s.k], u=a+Math.floor(rnd()*(b-a+1)), tech=pick(techs);
+    out.push({id:'h'+i,num:'#OWN-'+String(12+i).padStart(4,'0'),patient:pick(names),clinic,doctor,svc:s.k,price:s.p,
+      type:s.n.replace(/ \(за ед\.\)/,'')+(u>1?' · '+u+' ед.':''),units:u,shade:pick(['A1','A2','A3','BL1','BL2']),material:'—',teeth:'—',
+      cr:dIn(-ago),dl:dIn(-ago+7),tech,tk:tech.split(' ')[0],color:'done',stage:14,prog:100,urgent:false,files:[],comments:[]});
+  }
+  return out;
+}
+ORDERS.push(...genHistory());
+function svcName(k){return SERVICES.find(s=>s.k===k)?.n||k||'—';}
+function amt(o){return (+o.units||0)*(+o.price||0);}
+function rub(n){return Math.round(n||0).toLocaleString('ru-RU')+' ₽';}
+function money(n){return (n||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
 const SET_KEY='ownlab_settings_v1';
-let SETTINGS={name:'Иван Ж.',initials:'ИЖ',role:'Администратор',techs:['Артём К.','Мария В.','Дмитрий Н.']};
+let SETTINGS={name:'Иван Ж.',initials:'ИЖ',role:'Администратор',techs:['Артём К.','Мария В.','Дмитрий Н.'],
+  seller:{name:'OWN Digital Laboratory'},vat:'none',prices:{},docNum:{nak:1,sf:1},buyers:{}};
 try{Object.assign(SETTINGS,JSON.parse(localStorage.getItem(SET_KEY))||{});}catch(e){}
 
 let selId=null, fStatus='all', fTech='all', fSearch='', fUrgent=false, sortBy='dl', curView='orders', stagesToday=0;
@@ -616,7 +689,7 @@ function sortOrders(arr){
   const key=o=>parseDl(o.dl)?.getTime()??Infinity;
   const num=o=>parseInt(String(o.num).replace(/\D/g,''))||0;
   const f={dl:(a,b)=>key(a)-key(b),created:(a,b)=>num(b)-num(a),num:(a,b)=>num(a)-num(b),prog:(a,b)=>b.prog-a.prog,patient:(a,b)=>a.patient.localeCompare(b.patient,'ru')}[sortBy];
-  return arr.slice().sort(f);
+  return arr.slice().sort((a,b)=>(isDone(a)-isDone(b))||f(a,b));
 }
 function statusName(s){if(s==='all')return'Все заказы';if(s==='active')return'Заказы в работе';const g=GROUPS.find(x=>x[0]===s);return g?g[2]:s;}
 function renderOrders(){
@@ -668,7 +741,7 @@ function openDetail(id){
 function closeDetail(){selId=null;document.getElementById('detPanel').classList.remove('open');renderOrders();}
 
 function renderInfoTab(o){
-  const rows=[['Номер заказа',o.num,'var(--org)'],['Пациент',o.patient],['Клиника',o.clinic],['Врач',o.doctor||'—'],['Тип работы',o.type],['Единиц',o.units+' ед.'],['Зубы',o.teeth||'—'],['Материал',o.material||'—'],['Оттенок',o.shade||'—'],['Срок','📅 '+o.dl,o.urgent?'var(--red)':'var(--org)']];
+  const rows=[['Номер заказа',o.num,'var(--org)'],['Пациент',o.patient],['Клиника',o.clinic],['Врач',o.doctor||'—'],['Тип работы',o.type],['Единиц',o.units+' ед.'],['Зубы',o.teeth||'—'],['Материал',o.material||'—'],['Оттенок',o.shade||'—'],['Срок','📅 '+o.dl,o.urgent?'var(--red)':'var(--org)'],['Создан',o.cr||'—'],['Цена за ед.',rub(o.price)],['Сумма',rub(amt(o)),'var(--org)']];
   document.getElementById('dp-info-rows').innerHTML=rows.map(([k,v,c])=>`<div class="info-row"><span class="ik">${k}</span><span class="iv"${c?` style="color:${c}"`:''} >${esc(v)}</span></div>`).join('');
   document.getElementById('dp-stage-lbl').textContent=`Этап ${o.stage} из 14: ${STAGES[o.stage-1].n}`;
   document.getElementById('dp-pct').textContent=o.prog+'%';
@@ -951,32 +1024,292 @@ function bars(rows,max,onclick){
   return rows.map(([l,v,txt,arg])=>`<div class="bar-row" onclick='${onclick}(${JSON.stringify(arg??l).replace(/'/g,"&#39;")})' title="Показать заказы"><span class="bar-lbl">${esc(l)}</span><div class="bar-track"><div class="bar-fill" style="width:${max?Math.round(v/max*100):0}%"></div></div><span class="bar-val">${txt??v}</span></div>`).join('')||'<div class="pop-empty">Нет данных</div>';
 }
 function countBy(arr,f){const m={};arr.forEach(o=>{const k=f(o)||'—';m[k]=(m[k]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);}
+// ── ОТЧЁТЫ ────────────────────────────────────────────────────────────────────
+const R={preset:'12m',from:'',to:'',basis:'cr',group:'tech',clinic:'',tech:'',doctor:'',svc:'',status:'all',open:{}};
+const PRESETS={month:'Этот месяц',prev:'Прошлый месяц',quarter:'Этот квартал',ytd:'Этот год','12m':'Последние 12 месяцев',all:'Всё время',custom:'Свой интервал'};
+const MONTHS=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const GROUPBY={tech:['Техник','Техникам',o=>o.tech],clinic:['Клиника','Клиникам',o=>o.clinic],doctor:['Врач','Врачам',o=>o.doctor],svc:['Услуга','Услугам',o=>svcName(o.svc)],
+  month:['Месяц','Месяцам',o=>{const d=orderDate(o);return d?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'):'—';}]};
+const iso=d=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';
+const fromIso=s=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s||'');return m?new Date(+m[1],m[2]-1,+m[3]):null;};
+const ruDate=d=>d?d.toLocaleDateString('ru-RU'):'—';
+function applyPreset(p){
+  const t=new Date(), y=t.getFullYear(), m=t.getMonth(); let f=null,to=null;
+  if(p==='month'){f=new Date(y,m,1);to=new Date(y,m+1,0);}
+  else if(p==='prev'){f=new Date(y,m-1,1);to=new Date(y,m,0);}
+  else if(p==='quarter'){const q=m-m%3;f=new Date(y,q,1);to=new Date(y,q+3,0);}
+  else if(p==='ytd'){f=new Date(y,0,1);to=new Date(y,11,31);}
+  else if(p==='12m'){f=new Date(y,m-11,1);to=new Date(y,m+1,0);}
+  if(p!=='custom'){R.from=iso(f);R.to=iso(to);}
+  R.preset=p;
+}
+applyPreset(R.preset);
+function setR(k,v){
+  if(k==='preset')applyPreset(v); else{R[k]=v;if(k==='from'||k==='to')R.preset='custom';}
+  R.open={}; renderAnalytics();
+}
+function orderDate(o){return parseDl(R.basis==='cr'?o.cr:o.dl);}
+function periodTxt(){return R.from||R.to?(R.from?ruDate(fromIso(R.from)):'…')+' — '+(R.to?ruDate(fromIso(R.to)):'…'):'всё время';}
+function reportOrders(){
+  const f=fromIso(R.from), t=fromIso(R.to);
+  return ORDERS.filter(o=>{
+    const d=orderDate(o);
+    if(f&&(!d||d<f)||t&&(!d||d>t))return false;
+    if(R.clinic&&o.clinic!==R.clinic||R.tech&&o.tech!==R.tech||R.doctor&&o.doctor!==R.doctor||R.svc&&o.svc!==R.svc)return false;
+    return R.status==='all'||(R.status==='done')===isDone(o);
+  }).sort((a,b)=>(orderDate(a)||0)-(orderDate(b)||0));
+}
+function monthLabel(k){const m=/^(\d{4})-(\d{2})$/.exec(k);return m?MONTHS[+m[2]-1]+' '+m[1]:k;}
+function groupReport(list){
+  const f=GROUPBY[R.group][2], m=new Map();
+  list.forEach(o=>{const k=f(o)||'—';if(!m.has(k))m.set(k,[]);m.get(k).push(o);});
+  const rows=[...m].map(([k,os])=>({k,label:R.group==='month'?monthLabel(k):k,orders:os,units:os.reduce((s,o)=>s+(+o.units||0),0),sum:os.reduce((s,o)=>s+amt(o),0)}));
+  return rows.sort(R.group==='month'?(a,b)=>a.k.localeCompare(b.k):(a,b)=>b.sum-a.sum);
+}
+function filtersTxt(){
+  return [R.clinic&&'клиника: '+R.clinic,R.tech&&'техник: '+R.tech,R.doctor&&'врач: '+R.doctor,R.svc&&'услуга: '+svcName(R.svc),R.status!=='all'&&(R.status==='done'?'только завершённые':'только в работе')].filter(Boolean).join(', ');
+}
+function stLabel(o){return isDone(o)?'Завершён':STAGES[o.stage-1].n;}
+function toggleGroup(i){R.open[i]=!R.open[i];renderAnalytics();}
 function renderAnalytics(){
-  const act=ORDERS.filter(o=>!isDone(o));
-  const units=act.reduce((s,o)=>s+(+o.units||0),0);
-  const avg=act.length?Math.round(act.reduce((s,o)=>s+o.prog,0)/act.length):0;
+  const list=reportOrders(), act=list.filter(o=>!isDone(o));
+  const sum=list.reduce((s,o)=>s+amt(o),0), units=list.reduce((s,o)=>s+(+o.units||0),0);
   const over=act.filter(o=>(daysLeft(o)??0)<0).length;
-  const st=GROUPS.map(g=>[g[1]+' '+g[2],ORDERS.filter(o=>o.color===g[0]).length,null,g[0]]);
-  const techs=allTechs().map(t=>{const a=act.filter(o=>o.tech===t);return[t,a.reduce((s,o)=>s+(+o.units||0),0),a.length+' зак. · '+a.reduce((s,o)=>s+(+o.units||0),0)+' ед.'];}).sort((a,b)=>b[1]-a[1]);
-  const clin=countBy(ORDERS,o=>o.clinic), types=countBy(ORDERS,o=>o.type);
+  const vals=f=>uniq(ORDERS.map(f)).sort((a,b)=>a.localeCompare(b,'ru')).map(v=>[v,v]);
+  const sel=(k,opts,all)=>`<select class="set-input" onchange="setR('${k}',this.value)">${all?`<option value="">${all}</option>`:''}${opts.map(([v,l])=>`<option value="${esc(v)}"${R[k]===v?' selected':''}>${esc(l)}</option>`).join('')}</select>`;
+  const rows=groupReport(list), mxs=Math.max(1,...rows.map(r=>r.sum));
+  const st=GROUPS.map(g=>[g[1]+' '+g[2],list.filter(o=>o.color===g[0]).length,null,g[0]]);
+  const techs=allTechs().map(t=>{const a=list.filter(o=>o.tech===t);return[t,a.reduce((s,o)=>s+(+o.units||0),0),a.length+' зак. · '+a.reduce((s,o)=>s+(+o.units||0),0)+' ед.'];}).sort((a,b)=>b[1]-a[1]);
+  const clin=countBy(list,o=>o.clinic), types=countBy(list,o=>svcName(o.svc));
   const mx=a=>Math.max(1,...a.map(r=>r[1]));
+  const table=rows.length?`<div style="overflow-x:auto"><table class="rep">
+    <thead><tr><th>${GROUPBY[R.group][0]}</th><th class="n">Заказов</th><th class="n">Единиц</th><th class="n">Сумма</th><th style="width:22%">Доля</th></tr></thead>
+    <tbody>${rows.map((r,i)=>`<tr class="rep-g" onclick="toggleGroup(${i})"><td>${R.open[i]?'▾':'▸'} ${esc(r.label)}</td><td class="n">${r.orders.length}</td><td class="n">${r.units}</td><td class="n">${rub(r.sum)}</td><td><span class="share" style="width:${Math.round(r.sum/mxs*70)}%"></span><small>${sum?Math.round(r.sum/sum*100):0}%</small></td></tr>`+
+      (R.open[i]?`<tr class="rep-d"><td colspan="5"><table class="rep-in">${r.orders.map(o=>`<tr onclick="openDetail('${o.id}')"><td>${esc(R.basis==='cr'?o.cr:o.dl)}</td><td>${esc(o.num)}</td><td>${esc(o.patient)}</td><td>${esc(o.clinic)}</td><td>${esc(o.doctor)}</td><td>${esc(o.tech)}</td><td>${esc(svcName(o.svc))}</td><td class="n">${o.units} × ${rub(o.price)}</td><td class="n"><b>${rub(amt(o))}</b></td><td>${esc(stLabel(o))}</td></tr>`).join('')}</table></td></tr>`:'')).join('')}</tbody>
+    <tfoot><tr><td>Итого</td><td class="n">${list.length}</td><td class="n">${units}</td><td class="n">${rub(sum)}</td><td></td></tr></tfoot></table></div>`
+    :'<div class="pop-empty">За выбранный период заказов нет</div>';
   document.getElementById('view-analytics').innerHTML=`
-    <div class="page-ttl">📊 Аналитика</div><div class="page-sub">Сводка по всем заказам. Нажмите на строку, чтобы открыть список заказов.</div>
-    <div class="kpi-row">
-      <div class="kpi"><div class="kn">${ORDERS.length}</div><div class="kl">Всего заказов</div></div>
-      <div class="kpi"><div class="kn" style="color:var(--org)">${act.length}</div><div class="kl">В работе</div></div>
-      <div class="kpi"><div class="kn" style="color:var(--red)">${act.filter(o=>o.urgent).length}</div><div class="kl">⚡ Срочных</div></div>
-      <div class="kpi"><div class="kn" style="color:${over?'var(--red)':'var(--green)'}">${over}</div><div class="kl">Просрочено</div></div>
-      <div class="kpi"><div class="kn">${units}</div><div class="kl">Единиц в работе</div></div>
-      <div class="kpi"><div class="kn" style="color:var(--blue)">${avg}%</div><div class="kl">Средняя готовность</div></div>
+    <div class="page-ttl">📊 Аналитика и отчёты</div><div class="page-sub">Выберите период и группировку. Нажмите на строку отчёта, чтобы увидеть заказы.</div>
+    <div class="p-card">
+      <div class="p-card-ttl">Параметры отчёта</div>
+      <div class="r-grid">
+        <label>Период${sel('preset',Object.entries(PRESETS))}</label>
+        <label>С даты<input type="date" class="set-input" value="${R.from}" onchange="setR('from',this.value)"></label>
+        <label>По дату<input type="date" class="set-input" value="${R.to}" onchange="setR('to',this.value)"></label>
+        <label>Учитывать дату${sel('basis',[['cr','создания заказа'],['dl','срока сдачи']])}</label>
+        <label>Группировать по${sel('group',Object.entries(GROUPBY).map(([k,v])=>[k,v[1]]))}</label>
+        <label>Клиника${sel('clinic',vals(o=>o.clinic),'Все клиники')}</label>
+        <label>Врач${sel('doctor',vals(o=>o.doctor),'Все врачи')}</label>
+        <label>Техник${sel('tech',vals(o=>o.tech),'Все техники')}</label>
+        <label>Услуга${sel('svc',SERVICES.map(s=>[s.k,s.n]),'Все услуги')}</label>
+        <label>Статус${sel('status',[['all','Все заказы'],['active','В работе'],['done','Завершённые']])}</label>
+      </div>
+      <div class="r-actions">
+        <button class="set-btn sec" onclick="exportReportCSV()">⬇️ Выгрузить в Excel</button>
+        <button class="set-btn sec" onclick="printReport()">🖨 Печать / PDF</button>
+        <button class="set-btn" onclick="openDocModal()">🧾 Накладная и счёт-фактура</button>
+        <button class="set-btn sec" onclick="resetReport()">Сбросить</button>
+      </div>
     </div>
+    <div class="kpi-row">
+      <div class="kpi"><div class="kn">${list.length}</div><div class="kl">Заказов за период</div></div>
+      <div class="kpi"><div class="kn" style="color:var(--org)">${rub(sum)}</div><div class="kl">Сумма</div></div>
+      <div class="kpi"><div class="kn">${units}</div><div class="kl">Единиц</div></div>
+      <div class="kpi"><div class="kn" style="color:var(--blue)">${rub(list.length?sum/list.length:0)}</div><div class="kl">Средний чек</div></div>
+      <div class="kpi"><div class="kn" style="color:var(--org)">${act.length}</div><div class="kl">Из них в работе</div></div>
+      <div class="kpi"><div class="kn" style="color:${over?'var(--red)':'var(--green)'}">${over}</div><div class="kl">Просрочено</div></div>
+    </div>
+    <div class="p-card"><div class="p-card-ttl">Отчёт по: ${GROUPBY[R.group][1].toLowerCase()} · ${periodTxt()}${filtersTxt()?' · '+esc(filtersTxt()):''}</div>${table}</div>
     <div class="p-grid">
       <div class="p-card"><div class="p-card-ttl">По этапам</div>${bars(st,mx(st),'filterStatus')}</div>
-      <div class="p-card"><div class="p-card-ttl">Загрузка техников (активные)</div>${bars(techs,mx(techs),'filterTech')}</div>
+      <div class="p-card"><div class="p-card-ttl">Загрузка техников</div>${bars(techs,mx(techs),'filterTech')}</div>
       <div class="p-card"><div class="p-card-ttl">Клиники</div>${bars(clin,mx(clin),'searchFor')}</div>
-      <div class="p-card"><div class="p-card-ttl">Типы работ</div>${bars(types,mx(types),'searchFor')}</div>
+      <div class="p-card"><div class="p-card-ttl">Услуги</div>${bars(types,mx(types),'searchFor')}</div>
     </div>`;
 }
+function resetReport(){Object.assign(R,{basis:'cr',group:'tech',clinic:'',tech:'',doctor:'',svc:'',status:'all',open:{}});applyPreset('12m');renderAnalytics();}
+function downloadCSV(rows,name){
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  const blob=new Blob(['﻿'+rows.map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
+}
+const num2=n=>String(n).replace('.',',');
+function exportReportCSV(){
+  const list=reportOrders(); if(!list.length){showToast('Нечего выгружать','За период нет заказов','warning');return;}
+  const g=GROUPBY[R.group][0];
+  const rows=[['Отчёт OWN Digital Laboratory'],['Период',periodTxt(),'по дате '+(R.basis==='cr'?'создания':'срока сдачи')],['Фильтры',filtersTxt()||'нет'],[],
+    [g,'Дата','Номер','Пациент','Клиника','Врач','Техник','Услуга','Единиц','Цена за ед.','Сумма','Статус']];
+  groupReport(list).forEach(r=>{
+    r.orders.forEach(o=>rows.push([r.label,R.basis==='cr'?o.cr:o.dl,o.num,o.patient,o.clinic,o.doctor,o.tech,svcName(o.svc),o.units,num2(o.price),num2(amt(o)),stLabel(o)]));
+    rows.push(['Итого: '+r.label,'','','','','','','',r.units,'',num2(r.sum),r.orders.length+' зак.']);
+  });
+  rows.push(['ИТОГО','','','','','','','',list.reduce((s,o)=>s+(+o.units||0),0),'',num2(list.reduce((s,o)=>s+amt(o),0)),list.length+' зак.']);
+  downloadCSV(rows,`otchet-${R.group}-${R.from||'start'}-${R.to||'end'}.csv`);
+  showToast('Отчёт выгружен','CSV откроется в Excel');
+}
+
+// ── ПЕЧАТНЫЕ ДОКУМЕНТЫ ────────────────────────────────────────────────────────
+const DOC_CSS=`body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000;margin:20px}table{border-collapse:collapse;width:100%}
+td,th{border:1px solid #000;padding:3px 5px;vertical-align:top}th{font-weight:normal;background:#f3f3f3}.r{text-align:right;white-space:nowrap}.c{text-align:center}
+.nb td{border:none;padding:2px 4px}h1{font-size:15px;margin:8px 0 10px}.small{font-size:9px;color:#333}.hint{font-size:8px;text-align:center;border:none;color:#444}
+.sign{display:flex;gap:30px;margin-top:22px}.sign>div{flex:1}.ln{display:inline-block;border-bottom:1px solid #000;min-width:120px;height:13px}
+.g td{background:#f7f7f7;font-weight:bold}@media print{.noprint{display:none}body{margin:0}}@page{size:A4 landscape;margin:10mm}`;
+// Документ открывается во встроенном просмотрщике: не зависит от блокировки всплывающих окон
+let docHtml='', docTitle='';
+function openDocWindow(title,body){
+  docTitle=title;
+  docHtml=`<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>${esc(title)}</title><style>${DOC_CSS}</style></head><body>${body}</body></html>`;
+  document.getElementById('dv-title').textContent=title;
+  document.getElementById('dv-frame').srcdoc=docHtml;
+  closeDoc(); document.getElementById('docViewer').classList.add('open');
+}
+function closeViewer(){document.getElementById('docViewer').classList.remove('open');}
+function printDoc(){document.getElementById('dv-frame').contentWindow.print();}
+function downloadDoc(){
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([docHtml],{type:'text/html;charset=utf-8'}));
+  a.download=docTitle.replace(/[^\wа-яё№ .-]+/gi,'_')+'.html'; a.click();
+}
+function printReport(){
+  const list=reportOrders(); if(!list.length){showToast('Нечего печатать','За период нет заказов','warning');return;}
+  const sum=list.reduce((s,o)=>s+amt(o),0);
+  const body=`<h1>Отчёт по ${GROUPBY[R.group][1].toLowerCase()}</h1>
+    <table class="nb"><tr><td style="width:130px">Организация:</td><td>${esc(SETTINGS.seller.name||'OWN Digital Laboratory')}</td></tr>
+    <tr><td>Период:</td><td>${periodTxt()} (по дате ${R.basis==='cr'?'создания заказа':'срока сдачи'})</td></tr>
+    <tr><td>Фильтры:</td><td>${esc(filtersTxt()||'нет')}</td></tr><tr><td>Сформирован:</td><td>${new Date().toLocaleString('ru-RU')}, ${esc(SETTINGS.name)}</td></tr></table><br>
+    <table><tr><th>Дата</th><th>Номер</th><th>Пациент</th><th>Клиника</th><th>Врач</th><th>Техник</th><th>Услуга</th><th>Ед.</th><th>Цена</th><th>Сумма</th><th>Статус</th></tr>
+    ${groupReport(list).map(r=>`<tr class="g"><td colspan="7">${esc(GROUPBY[R.group][0])}: ${esc(r.label)} — ${r.orders.length} зак.</td><td class="r">${r.units}</td><td></td><td class="r">${money(r.sum)}</td><td></td></tr>`+
+      r.orders.map(o=>`<tr><td>${esc(R.basis==='cr'?o.cr:o.dl)}</td><td>${esc(o.num)}</td><td>${esc(o.patient)}</td><td>${esc(o.clinic)}</td><td>${esc(o.doctor)}</td><td>${esc(o.tech)}</td><td>${esc(svcName(o.svc))}</td><td class="r">${o.units}</td><td class="r">${money(o.price)}</td><td class="r">${money(amt(o))}</td><td>${esc(stLabel(o))}</td></tr>`).join('')).join('')}
+    <tr class="g"><td colspan="7">ИТОГО — ${list.length} зак.</td><td class="r">${list.reduce((s,o)=>s+(+o.units||0),0)}</td><td></td><td class="r">${money(sum)}</td><td></td></tr></table>`;
+  openDocWindow('Отчёт OWN '+periodTxt(),body);
+}
+
+// Сумма прописью
+function rubWords(n){
+  const r=Math.floor(n+1e-9), k=Math.round((n-r)*100);
+  const ones=[['','один','два','три','четыре','пять','шесть','семь','восемь','девять'],['','одна','две','три','четыре','пять','шесть','семь','восемь','девять']];
+  const teens=['десять','одиннадцать','двенадцать','тринадцать','четырнадцать','пятнадцать','шестнадцать','семнадцать','восемнадцать','девятнадцать'];
+  const tens=['','','двадцать','тридцать','сорок','пятьдесят','шестьдесят','семьдесят','восемьдесят','девяносто'];
+  const hund=['','сто','двести','триста','четыреста','пятьсот','шестьсот','семьсот','восемьсот','девятьсот'];
+  const pl=(n,f)=>{n%=100;if(n>10&&n<20)return f[2];n%=10;return n===1?f[0]:n>=2&&n<=4?f[1]:f[2];};
+  const triad=(n,fem)=>{const t=n%100;return[hund[Math.floor(n/100)]].concat(t>=10&&t<20?[teens[t-10]]:[tens[Math.floor(t/10)],ones[fem?1:0][t%10]]).filter(Boolean).join(' ');};
+  const scale=[[null,0],[['тысяча','тысячи','тысяч'],1],[['миллион','миллиона','миллионов'],0],[['миллиард','миллиарда','миллиардов'],0]];
+  const parts=[]; let x=r,i=0;
+  while(x>0&&i<scale.length){const t=x%1000;if(t)parts.unshift(triad(t,scale[i][1])+(scale[i][0]?' '+pl(t,scale[i][0]):''));x=Math.floor(x/1000);i++;}
+  const s=(parts.join(' ')||'ноль')+' '+pl(r,['рубль','рубля','рублей'])+' '+String(k).padStart(2,'0')+' '+pl(k,['копейка','копейки','копеек']);
+  return s[0].toUpperCase()+s.slice(1);
+}
+const VAT_OPTS=[['none','Без НДС'],['5','5%'],['7','7%'],['10','10%'],['20','20%'],['22','22%']];
+function vatRate(){return SETTINGS.vat==='none'?0:+SETTINGS.vat;}
+const DOC={clinic:'',onlyDone:true,patient:true,date:'',nak:'',sf:''};
+function docOrders(){return reportOrders().filter(o=>o.clinic===DOC.clinic&&(!DOC.onlyDone||isDone(o)));}
+function openDocModal(){
+  const clinics=uniq(reportOrders().map(o=>o.clinic));
+  if(!clinics.length){showToast('Нет заказов','В выбранном периоде нет заказов','warning');return;}
+  Object.assign(DOC,{clinic:R.clinic&&clinics.includes(R.clinic)?R.clinic:clinics[0],date:iso(new Date()),nak:String(SETTINGS.docNum.nak),sf:String(SETTINGS.docNum.sf)});
+  renderDocModal(); document.getElementById('docOverlay').classList.add('open');
+}
+function closeDoc(){document.getElementById('docOverlay').classList.remove('open');}
+function saveDocFields(){
+  const v=id=>document.getElementById(id)?.value.trim()??'';
+  if(!document.getElementById('d-inn'))return;
+  SETTINGS.buyers[DOC.clinic]={inn:v('d-inn'),kpp:v('d-kpp'),addr:v('d-addr')};
+  Object.assign(DOC,{nak:v('d-nak'),sf:v('d-sf'),date:v('d-date')});
+  saveSettings();
+}
+function docSet(k,v){saveDocFields();DOC[k]=v;renderDocModal();}
+function renderDocModal(){
+  const clinics=uniq(reportOrders().map(o=>o.clinic)), b=SETTINGS.buyers[DOC.clinic]||{}, items=docOrders();
+  const sum=items.reduce((s,o)=>s+amt(o),0), r=vatRate(), s=SETTINGS.seller;
+  document.getElementById('docModal').innerHTML=`
+    <div class="modal-title">🧾 Накладная и счёт-фактура</div>
+    <div class="modal-sub">Период отчёта: ${periodTxt()}${filtersTxt()?' · '+esc(filtersTxt()):''}</div>
+    <div class="form-sec-title">Покупатель</div>
+    <div class="form-group"><label class="form-label">Клиника</label><select class="form-select" onchange="docSet('clinic',this.value)">${clinics.map(c=>`<option${c===DOC.clinic?' selected':''}>${esc(c)}</option>`).join('')}</select></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">ИНН</label><input class="form-input" id="d-inn" value="${esc(b.inn||'')}" placeholder="10 или 12 цифр"></div>
+      <div class="form-group"><label class="form-label">КПП</label><input class="form-input" id="d-kpp" value="${esc(b.kpp||'')}" placeholder="для организаций"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Юридический адрес</label><input class="form-input" id="d-addr" value="${esc(b.addr||'')}" placeholder="Индекс, город, улица, дом"></div>
+    <div class="form-div"></div>
+    <div class="form-sec-title">Документ</div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">№ накладной</label><input class="form-input" id="d-nak" value="${esc(DOC.nak)}"></div>
+      <div class="form-group"><label class="form-label">№ счёт-фактуры</label><input class="form-input" id="d-sf" value="${esc(DOC.sf)}"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Дата документов</label><input class="form-input" id="d-date" type="date" value="${DOC.date}"></div>
+    <label class="chk"><input type="checkbox"${DOC.onlyDone?' checked':''} onchange="docSet('onlyDone',this.checked)"> Только завершённые заказы</label>
+    <label class="chk"><input type="checkbox"${DOC.patient?' checked':''} onchange="docSet('patient',this.checked)"> Указывать пациента в наименовании</label>
+    <div class="doc-sum">Заказов: <b>${items.length}</b> · единиц: <b>${items.reduce((x,o)=>x+(+o.units||0),0)}</b> · сумма: <b>${rub(sum)}</b> · ${r?'в т.ч. НДС '+r+'%: '+rub(sum*r/(100+r)):'без НДС'}</div>
+    ${s.inn?'':'<div class="doc-warn">⚠️ Реквизиты лаборатории не заполнены — откройте «Настройки → Реквизиты лаборатории». Пустые поля будут напечатаны прочерками.</div>'}
+    ${items.length?'':'<div class="doc-warn">Нет заказов для этой клиники с выбранными условиями.</div>'}
+    <div class="modal-actions">
+      <button class="modal-btn cancel" onclick="closeDoc()">Закрыть</button>
+      <button class="modal-btn primary" onclick="makeDoc('nak')"${items.length?'':' disabled'}>Накладная →</button>
+      <button class="modal-btn primary" onclick="makeDoc('sf')"${items.length?'':' disabled'}>Счёт-фактура →</button>
+    </div>`;
+}
+const B=v=>v?esc(v):'—';
+function docLines(items){
+  const r=vatRate();
+  return items.map(o=>{
+    const sum=amt(o), vat=r?Math.round(sum*r/(100+r)*100)/100:0, net=sum-vat;
+    const name=svcName(o.svc)+', заказ '+o.num+(DOC.patient?', пациент '+o.patient:'')+(o.teeth&&o.teeth!=='—'?', зубы '+o.teeth:'');
+    return{name,qty:+o.units||0,price:net/(+o.units||1),net,vat,sum};
+  });
+}
+function makeDoc(kind){
+  saveDocFields();
+  const items=docOrders(); if(!items.length)return;
+  const L=docLines(items), s=SETTINGS.seller, b=SETTINGS.buyers[DOC.clinic]||{}, r=vatRate();
+  const tot=k=>L.reduce((x,l)=>x+l[k],0), dt=ruDate(fromIso(DOC.date)||new Date());
+  const rate=r?r+'%':'без НДС', vatCell=v=>r?money(v):'без НДС';
+  const seller=`${B(s.name)}, ИНН ${B(s.inn)}${s.kpp?', КПП '+esc(s.kpp):''}, ${B(s.addr)}`;
+  const bank=s.rs?`, р/с ${esc(s.rs)} в ${B(s.bank)}, БИК ${B(s.bik)}, к/с ${B(s.ks)}`:'';
+  const buyer=`${esc(DOC.clinic)}, ИНН ${B(b.inn)}${b.kpp?', КПП '+esc(b.kpp):''}, ${B(b.addr)}`;
+  let title, body;
+  if(kind==='nak'){
+    const n=DOC.nak; title='Накладная № '+n+' от '+dt;
+    body=`<h1>Товарная накладная № ${esc(n)} от ${dt}</h1>
+    <table class="nb"><tr><td style="width:140px">Поставщик:</td><td><b>${seller}${bank}</b></td></tr>
+    <tr><td>Грузоотправитель:</td><td>он же</td></tr>
+    <tr><td>Плательщик:</td><td><b>${buyer}</b></td></tr>
+    <tr><td>Грузополучатель:</td><td>${buyer}</td></tr>
+    <tr><td>Основание:</td><td>Заказы-наряды ${items.map(o=>esc(o.num)).join(', ')}</td></tr></table><br>
+    <table><tr><th>№</th><th>Наименование товара (работ, услуг)</th><th>Ед. изм.</th><th>Код ОКЕИ</th><th>Кол-во</th><th>Цена, руб.</th><th>Сумма без НДС, руб.</th><th>Ставка НДС</th><th>Сумма НДС, руб.</th><th>Сумма с НДС, руб.</th></tr>
+    ${L.map((l,i)=>`<tr><td class="c">${i+1}</td><td>${esc(l.name)}</td><td class="c">шт</td><td class="c">796</td><td class="r">${l.qty}</td><td class="r">${money(l.price)}</td><td class="r">${money(l.net)}</td><td class="c">${rate}</td><td class="r">${vatCell(l.vat)}</td><td class="r">${money(l.sum)}</td></tr>`).join('')}
+    <tr><td colspan="4" class="r"><b>Итого</b></td><td class="r"><b>${tot('qty')}</b></td><td></td><td class="r"><b>${money(tot('net'))}</b></td><td></td><td class="r"><b>${vatCell(tot('vat'))}</b></td><td class="r"><b>${money(tot('sum'))}</b></td></tr></table>
+    <p>Всего наименований ${L.length}, на сумму ${money(tot('sum'))} руб.<br><b>${rubWords(tot('sum'))}</b><br>${r?'В том числе НДС '+r+'%: '+money(tot('vat'))+' руб.':'НДС не облагается'}</p>
+    <div class="sign"><div>Отпуск разрешил<br><span class="ln"></span> / ${B(s.head)} /<br><span class="small">Руководитель</span><br><br>Главный (старший) бухгалтер<br><span class="ln"></span> / ${B(s.acc)} /<br><br>Отпуск груза произвёл<br><span class="ln"></span> / <span class="ln"></span> /<br><br>М.П.</div>
+    <div>Груз принял<br><span class="ln"></span> / <span class="ln"></span> /<br><br>Груз получил грузополучатель<br><span class="ln"></span> / <span class="ln"></span> /<br><br>Доверенность № <span class="ln" style="min-width:60px"></span> от <span class="ln" style="min-width:80px"></span><br><br>М.П.</div></div>`;
+  } else {
+    const n=DOC.sf; title='Счёт-фактура № '+n+' от '+dt;
+    body=`<div class="small" style="text-align:right">Приложение № 1<br>к постановлению Правительства Российской Федерации<br>от 26 декабря 2011 г. № 1137</div>
+    <h1>СЧЁТ-ФАКТУРА № ${esc(n)} от ${dt} (1)</h1>
+    <table class="nb"><tr><td style="width:320px">Исправление № — от — (1а)</td><td></td></tr>
+    <tr><td>Продавец (2)</td><td><b>${B(s.name)}</b></td></tr><tr><td>Адрес (2а)</td><td>${B(s.addr)}</td></tr>
+    <tr><td>ИНН/КПП продавца (2б)</td><td>${B(s.inn)} / ${B(s.kpp)}</td></tr>
+    <tr><td>Грузоотправитель и его адрес (3)</td><td>он же</td></tr>
+    <tr><td>Грузополучатель и его адрес (4)</td><td>${esc(DOC.clinic)}, ${B(b.addr)}</td></tr>
+    <tr><td>К платёжно-расчётному документу № — от — (5)</td><td></td></tr>
+    <tr><td>Документ об отгрузке (5а)</td><td>№ п/п 1–${L.length} № ${esc(DOC.nak)} от ${dt}</td></tr>
+    <tr><td>Покупатель (6)</td><td><b>${esc(DOC.clinic)}</b></td></tr><tr><td>Адрес (6а)</td><td>${B(b.addr)}</td></tr>
+    <tr><td>ИНН/КПП покупателя (6б)</td><td>${B(b.inn)} / ${B(b.kpp)}</td></tr>
+    <tr><td>Валюта: наименование, код (7)</td><td>Российский рубль, 643</td></tr>
+    <tr><td>Идентификатор государственного контракта, договора (соглашения) (8)</td><td>—</td></tr></table><br>
+    <table><tr><th rowspan="2">№ п/п</th><th rowspan="2">Наименование товара (описание выполненных работ, оказанных услуг), имущественного права</th><th rowspan="2">Код вида товара</th><th colspan="2">Единица измерения</th><th rowspan="2">Коли-чество (объём)</th><th rowspan="2">Цена (тариф) за единицу измерения</th><th rowspan="2">Стоимость товаров (работ, услуг) без налога — всего</th><th rowspan="2">В том числе сумма акциза</th><th rowspan="2">Налоговая ставка</th><th rowspan="2">Сумма налога, предъявляемая покупателю</th><th rowspan="2">Стоимость товаров (работ, услуг) с налогом — всего</th><th colspan="2">Страна происхождения товара</th><th rowspan="2">Регистрационный номер декларации на товары</th></tr>
+    <tr><th>код</th><th>условное обозначение</th><th>цифровой код</th><th>краткое наименование</th></tr>
+    <tr>${['1','1а','1б','2','2а','3','4','5','6','7','8','9','10','10а','11'].map(x=>`<td class="hint">${x}</td>`).join('')}</tr>
+    ${L.map((l,i)=>`<tr><td class="c">${i+1}</td><td>${esc(l.name)}</td><td class="c">—</td><td class="c">796</td><td class="c">шт</td><td class="r">${l.qty}</td><td class="r">${money(l.price)}</td><td class="r">${money(l.net)}</td><td class="c">без акциза</td><td class="c">${rate}</td><td class="r">${vatCell(l.vat)}</td><td class="r">${money(l.sum)}</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>`).join('')}
+    <tr><td colspan="7"><b>Всего к оплате (9)</b></td><td class="r"><b>${money(tot('net'))}</b></td><td class="c">X</td><td></td><td class="r"><b>${vatCell(tot('vat'))}</b></td><td class="r"><b>${money(tot('sum'))}</b></td><td colspan="3"></td></tr></table>
+    <div class="sign"><div>Руководитель организации или иное уполномоченное лицо<br><span class="ln"></span> / ${B(s.head)} /<br><span class="small">(подпись) (ф.и.о.)</span></div>
+    <div>Главный бухгалтер или иное уполномоченное лицо<br><span class="ln"></span> / ${B(s.acc)} /<br><span class="small">(подпись) (ф.и.о.)</span></div></div>
+    <div class="sign"><div>Индивидуальный предприниматель или иное уполномоченное лицо<br><span class="ln"></span> / <span class="ln"></span> /</div><div>Реквизиты свидетельства о государственной регистрации индивидуального предпринимателя<br><span class="ln" style="min-width:260px"></span></div></div>`;
+  }
+  openDocWindow(title,body);
+  SETTINGS.docNum[kind]=Math.max(+SETTINGS.docNum[kind]||1,(parseInt(DOC[kind])||0)+1); saveSettings();
+  showToast((kind==='nak'?'Накладная':'Счёт-фактура')+' сформирована','№ '+DOC[kind]+' · '+DOC.clinic);
+}
+
 function searchFor(q){setFilter({status:'all',tech:'all',urgent:false,search:q});}
 function renderDeadlines(){
   const act=ORDERS.filter(o=>!isDone(o)).map(o=>[o,daysLeft(o)]).sort((a,b)=>(a[1]??1e9)-(b[1]??1e9));
@@ -1010,13 +1343,37 @@ function clearDict(){
   Object.assign(DICT,loadDict()); renderSettings(); showToast('Подсказки очищены','Остались значения из текущих заказов');
 }
 function exportCSV(){
-  const cols=[['num','Номер'],['patient','Пациент'],['clinic','Клиника'],['doctor','Врач'],['type','Тип работы'],['units','Единиц'],['teeth','Зубы'],['material','Материал'],['shade','Оттенок'],['dl','Срок'],['tech','Техник'],['prog','Готовность %']];
+  const cols=[['num','Номер'],['patient','Пациент'],['clinic','Клиника'],['doctor','Врач'],['type','Тип работы'],['units','Единиц'],['teeth','Зубы'],['material','Материал'],['shade','Оттенок'],['dl','Срок'],['tech','Техник'],['prog','Готовность %'],['cr','Создан'],['price','Цена за ед.']];
   const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
-  const rows=[cols.map(c=>c[1]).concat('Этап','Срочный')].concat(ORDERS.map(o=>cols.map(c=>o[c[0]]).concat(STAGES[o.stage-1].n,o.urgent?'да':'нет')));
+  const rows=[cols.map(c=>c[1]).concat('Этап','Срочный','Сумма')].concat(ORDERS.map(o=>cols.map(c=>o[c[0]]).concat(STAGES[o.stage-1].n,o.urgent?'да':'нет',amt(o))));
   const blob=new Blob(['﻿'+rows.map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='ownlab-orders-'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
   showToast('Экспорт готов',ORDERS.length+' заказов · CSV для Excel');
 }
+function saveSeller(){
+  const v=id=>document.getElementById(id).value.trim();
+  SELLER_FIELDS.forEach(([k])=>SETTINGS.seller[k]=v('s-'+k));
+  SETTINGS.vat=document.getElementById('s-vat').value;
+  saveSettings(); showToast('Реквизиты сохранены',SETTINGS.seller.name||'');
+}
+function setPrice(k,v){SETTINGS.prices[k]=Math.max(0,+v||0);saveSettings();showToast('Цена обновлена',svcName(k)+': '+rub(SETTINGS.prices[k]));}
+function priceOf(k){return SETTINGS.prices[k]??SERVICES.find(s=>s.k===k)?.p??0;}
+const SELLER_FIELDS=[['name','Наименование','ООО «…» или ИП …'],['inn','ИНН',''],['kpp','КПП','для ООО'],['addr','Юр. адрес',''],['bank','Банк',''],['bik','БИК',''],['rs','Расчётный счёт',''],['ks','Корр. счёт',''],['head','Руководитель','Фамилия И.О.'],['acc','Главный бухгалтер','Фамилия И.О.']];
+function sellerCard(){
+  const s=SETTINGS.seller;
+  return `<div class="p-card"><div class="p-card-ttl">Реквизиты лаборатории (для накладных и счетов-фактур)</div>
+    ${SELLER_FIELDS.map(([k,l,ph])=>`<div class="set-row"><label for="s-${k}">${l}</label><input class="set-input" id="s-${k}" value="${esc(s[k]||'')}" placeholder="${ph}"></div>`).join('')}
+    <div class="set-row"><label for="s-vat">НДС</label><select class="set-input" id="s-vat">${VAT_OPTS.map(([v,l])=>`<option value="${v}"${SETTINGS.vat===v?' selected':''}>${l}</option>`).join('')}</select></div>
+    <div class="set-row"><label></label><button class="set-btn" onclick="saveSeller()">Сохранить реквизиты</button></div>
+    <div class="set-note">Цены в прайсе считаются итоговыми: при выборе ставки НДС налог выделяется из суммы. Перед отправкой клиентам документы стоит сверить с бухгалтером.</div>
+  </div>
+  <div class="p-card"><div class="p-card-ttl">Прайс-лист (цена за единицу)</div>
+    ${SERVICES.map(x=>`<div class="set-row"><label style="width:240px">${esc(x.n)}</label><input class="set-input" type="number" min="0" step="100" style="max-width:140px" value="${priceOf(x.k)}" onchange="setPrice('${x.k}',this.value)"> ₽</div>`).join('')}
+    <div class="set-note">Цена подставляется в новые заказы. У уже созданных заказов цена не меняется.</div>
+  </div>`;
+}
+function fillPrice(){const k=document.getElementById('f-type').value;document.getElementById('f-price').value=k?priceOf(k):'';updSum();}
+function updSum(){const s=(+document.getElementById('f-units').value||0)*(+document.getElementById('f-price').value||0);document.getElementById('f-sum').textContent=s?rub(s):'—';}
 function renderSettings(){
   const roles=['Администратор','Менеджер','Техник','Контроль качества'];
   document.getElementById('view-settings').innerHTML=`
@@ -1032,6 +1389,7 @@ function renderSettings(){
       <div class="set-row"><input class="set-input" id="set-tech" placeholder="Имя Ф. нового техника" onkeydown="if(event.key==='Enter')addTech()"><button class="set-btn" onclick="addTech()">＋ Добавить</button></div>
       <div class="set-note">Список используется в фильтре «По технику» и в подсказках при создании заказа.</div>
     </div>
+    ${sellerCard()}
     <div class="p-card"><div class="p-card-ttl">Подсказки при вводе</div>
       ${[['patient','Пациенты'],['clinic','Клиники'],['doctor','Врачи'],['tech','Техники']].map(([k,l])=>`<div class="sb-stat"><span class="sk">${l}</span><span class="sv">${DICT[k].length}</span></div>`).join('')}
       <div class="set-row" style="margin-top:10px"><button class="set-btn danger" onclick="clearDict()">Очистить сохранённые подсказки</button></div>
@@ -1055,7 +1413,7 @@ function submitOrder(){
   const dlRaw=document.getElementById('f-deadline').value;
   const dl=dlRaw?new Date(dlRaw).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'}):'—';
   const techVal=document.getElementById('f-tech').value.trim();
-  const newO={id:'o'+Date.now(),num,patient:document.getElementById('f-patient').value.trim(),clinic:document.getElementById('f-clinic').value.trim(),doctor:document.getElementById('f-doctor').value.trim()||'—',type:types[document.getElementById('f-type').value]||document.getElementById('f-type').value,units:parseInt(document.getElementById('f-units').value)||1,shade:document.getElementById('f-shade').value||'—',material:document.getElementById('f-material').value||'—',teeth:document.getElementById('f-teeth').value||'—',dl,tech:techVal||'—',tk:techVal.split(' ')[0],color:'green',stage:1,prog:4,urgent:document.getElementById('f-priority').value==='urgent',files:pendingFiles.map(toFileObj),comments:[]};
+  const newO={id:'o'+Date.now(),num,patient:document.getElementById('f-patient').value.trim(),clinic:document.getElementById('f-clinic').value.trim(),doctor:document.getElementById('f-doctor').value.trim()||'—',type:types[document.getElementById('f-type').value]||document.getElementById('f-type').value,units:parseInt(document.getElementById('f-units').value)||1,shade:document.getElementById('f-shade').value||'—',material:document.getElementById('f-material').value||'—',teeth:document.getElementById('f-teeth').value||'—',dl,cr:dIn(0),svc:document.getElementById('f-type').value,price:+document.getElementById('f-price').value||priceOf(document.getElementById('f-type').value),tech:techVal||'—',tk:techVal.split(' ')[0],color:'green',stage:1,prog:4,urgent:document.getElementById('f-priority').value==='urgent',files:pendingFiles.map(toFileObj),comments:[]};
   DICT_FIELDS.forEach(k=>remember(k,newO[k]));
   pendingFiles=[]; renderPending();
   ORDERS.unshift(newO); closeModal(); renderOrders(); openDetail(newO.id);
@@ -1079,7 +1437,7 @@ function showToast(title,sub='',type='success'){
 
 // ── КЛАВИШИ ───────────────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){if(document.querySelector('.pop.open')){closePops();return;}closeDetail();closeModal();}
+  if(e.key==='Escape'){if(document.querySelector('.pop.open')){closePops();return;}closeDetail();closeModal();closeDoc();closeViewer();}
   if(e.key==='/'&&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){e.preventDefault();showView('orders');document.getElementById('searchInput').focus();}
 });
 
