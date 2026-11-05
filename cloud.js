@@ -10,7 +10,7 @@
   const BUCKET = 'order-files', MAX_CLOUD_FILE = 50 * 1024 * 1024;
   const TOKEN_KEY = 'ownlab_pending_invite';
   const DEMO_ORDERS = ORDERS.slice();
-  let sb = null, ME = null, CLINICS = [], PEOPLE = [], INVITES = [], LAB = {}, SELLER = {};
+  let sb = null, ME = null, CLINICS = [], PEOPLE = [], INVITES = [], LAB = {}, SELLER = {}, TECH_RATES = {};
   const orig = { renderInfoTab, renderTL, renderAnalytics, showView, renderUserMenu, updateCounts, doAction, openModal };
 
   const $ = id => document.getElementById(id);
@@ -200,28 +200,32 @@
   // ── ЗАГРУЗКА ДАННЫХ ─────────────────────────────────────────────────────────
   async function loadAll() {
     const none = Promise.resolve({ data: [] });
-    const [cl, pp, ord, pr, cm, fl, st, inv] = await Promise.all([
+    const [cl, pp, ord, pr, cm, fl, st, inv, tr] = await Promise.all([
       sb.from('clinics').select('*').order('name'),
       sb.from('profiles').select('*').order('full_name'),
       sb.from('orders').select('*').order('created_at', { ascending: false }),
       canPrice() ? sb.from('order_prices').select('*') : none,
       sb.from('order_comments').select('*').order('created_at'),
       sb.from('order_files').select('*').order('created_at'),
-      isStaff() ? sb.from('settings').select('*') : none,
+      sb.from('settings').select('*'),
       INVITE_ROLES[role()] ? sb.from('invites').select('*').is('used_at', null).order('created_at', { ascending: false }) : none,
+      isStaff() || role() === 'tech' ? sb.from('tech_rates').select('*') : none,
     ]);
-    for (const r of [cl, pp, ord, pr, cm, fl, st, inv]) if (r.error) throw r.error;
+    for (const r of [cl, pp, ord, pr, cm, fl, st, inv, tr]) if (r.error) throw r.error;
+    TECH_RATES = Object.fromEntries(tr.data.map(x => [x.tech_id, +x.percent]));
     CLINICS = cl.data; PEOPLE = pp.data; INVITES = inv.data;
     const me = PEOPLE.find(p => p.id === ME.id); if (me) ME = me;
     const prices = Object.fromEntries(pr.data.map(x => [x.order_id, +x.price]));
     const by = (arr, k) => arr.reduce((m, x) => ((m[x[k]] = m[x[k]] || []).push(x), m), {});
     const cms = by(cm.data, 'order_id'), fls = by(fl.data, 'order_id');
-    st.data.forEach(s => { if (s.key === 'lab') LAB = s.value; if (s.key === 'seller') SELLER = s.value; });
+    let catalog = null;
+    st.data.forEach(s => { if (s.key === 'lab') LAB = s.value; if (s.key === 'seller') SELLER = s.value; if (s.key === 'catalog') catalog = s.value.items; });
+    if (Array.isArray(catalog) && catalog.length) SERVICES.splice(0, SERVICES.length, ...catalog.map(i => ({ k: i.k, n: i.n, u: i.u || 'шт', p: +(LAB.prices || {})[i.k] || 0 })));
     Object.assign(SETTINGS, {
       name: ME.full_name || ME.email, initials: initialsOf(ME.full_name || ME.email), role: ROLE_N[ME.role],
       seller: Object.assign({ name: 'OWN Digital Laboratory' }, SELLER), vat: SELLER.vat || 'none',
       prices: LAB.prices || {}, docNum: LAB.docNum || { nak: 1, sf: 1 }, buyers: LAB.buyers || {},
-      techs: techs().map(t => t.full_name),
+      techs: techs().map(t => t.full_name), techPercent: LAB.techPercent ?? 30, techRates: {},
     });
     ORDERS = ord.data.map(r => toOrder(r, prices[r.id], cms[r.id] || [], fls[r.id] || []));
     DICT.clinic = uniq(CLINICS.map(c => c.name));
@@ -236,7 +240,7 @@
       id: r.id, num: r.num, clinic_id: r.clinic_id, doctor_id: r.doctor_id, tech_id: r.tech_id,
       clinic: clinicName(r.clinic_id) || d.clinic || '—', doctor: person(r.doctor_id)?.full_name || d.doctor || '—',
       tech: techName, tk: techName.split(' ')[0], stage: st, color: STAGES[st - 1].c, prog: st === 14 ? 100 : Math.max(4, Math.round(st / 14 * 100)),
-      cr: d.cr || ruDT(r.created_at), price: price ?? 0, units: +d.units || 1,
+      cr: d.cr || ruDT(r.created_at), price: price ?? 0, units: +d.units || 1, doneAt: r.done_at ? ruDT(r.done_at) : '',
       comments: comments.map(c => ({ av: initialsOf(c.author_name || '?'), rc: c.author_role === 'tech' ? 'tech' : 'admin', au: c.author_name || '—', role: ROLE_N[c.author_role] || '', t: c.body, time: new Date(c.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) })),
       files: files.map(f => ({ n: f.name, size: f.size, path: f.path })),
     });
@@ -273,6 +277,9 @@
     const techLbl = $('tech-nav').previousElementSibling;
     [$('tech-nav'), techLbl, techLbl.previousElementSibling].forEach(el => el.style.display = isStaff() ? '' : 'none');
     document.querySelector('.nav-item[data-view="analytics"]').style.display = canPrice() ? '' : 'none';
+    const np = document.querySelector('.nav-item[data-view="pay"]');
+    np.style.display = isStaff() || r === 'tech' ? '' : 'none';
+    np.textContent = r === 'tech' ? '💰 Мой заработок' : '💰 Зарплата';
     let nu = document.querySelector('.nav-item[data-view="users"]');
     if (!nu) {
       nu = document.createElement('div'); nu.className = 'nav-item'; nu.dataset.view = 'users'; nu.textContent = '👥 Пользователи';
@@ -286,6 +293,7 @@
 
   window.showView = function (v) {
     if (v === 'analytics' && !canPrice()) v = 'orders';
+    if (v === 'pay' && !(isStaff() || role() === 'tech')) v = 'orders';
     if (v === 'users' && !INVITE_ROLES[role()]) v = 'orders';
     const up = $('view-users');
     if (v === 'users') {
@@ -303,6 +311,7 @@
       <div class="pop-item ico" onclick="closePops();showView('settings')">⚙️ Профиль и настройки</div>
       ${INVITE_ROLES[role()] ? `<div class="pop-item ico" onclick="closePops();showView('users')">👥 Пользователи</div>` : ''}
       ${canPrice() ? `<div class="pop-item ico" onclick="closePops();showView('analytics')">📊 Аналитика</div>` : ''}
+      ${isStaff() || role() === 'tech' ? `<div class="pop-item ico" onclick="closePops();showView('pay')">💰 ${role() === 'tech' ? 'Мой заработок' : 'Зарплата'}</div>` : ''}
       <div class="pop-item ico" onclick="closePops();showView('deadlines')">⏱ Сроки</div>
       <div class="pop-item ico" onclick="CLOUD_UI.logout()">🚪 Выйти</div>`;
   };
@@ -415,7 +424,7 @@
     for (const [id, l] of req) if (!v(id)) { showToast('Заполните поле', l + ' — обязательное', 'error'); $(id).focus(); return; }
     const btn = document.querySelector('#modalOverlay .modal-btn.primary'); if (btn) btn.disabled = true;
     try {
-      const svc = v('f-type'), types = { veneers_emax: 'Виниры (е.мах)', crown_zirconia: 'Коронки (цирконий)', crown_emax: 'Коронки (е.мах)', bridge: 'Мостовидный протез', implant_crown: 'Имплант-корона', full_mouth: 'Полная реставрация', temp: 'Временные (ПММА)' };
+      const svc = v('f-type');
       let clinic = isClinic() ? CLINICS.find(c => c.id === ME.clinic_id) : CLINICS.find(c => c.name.toLowerCase() === v('f-clinic').toLowerCase());
       if (!clinic) {
         if (!isStaff()) throw new Error('Клиника не найдена');
@@ -427,7 +436,7 @@
       const tech = isStaff() ? techs().find(p => p.full_name.toLowerCase() === tName.toLowerCase()) : null;
       if (isStaff() && tName && !tech) showToast('Техник не найден среди пользователей', 'Заказ создан без назначения — пригласите техника на странице «Пользователи»', 'warning');
       const dl = new Date(v('f-deadline')).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const data = { patient: v('f-patient'), clinic: clinic.name, doctor: doctor?.full_name || docName || '—', tech: tech?.full_name || '—', type: types[svc] || svc, svc,
+      const data = { patient: v('f-patient'), clinic: clinic.name, doctor: doctor?.full_name || docName || '—', tech: tech?.full_name || '—', type: svcName(svc), svc,
         units: parseInt(v('f-units')) || 1, shade: v('f-shade') || '—', material: v('f-material') || '—', teeth: v('f-teeth') || '—', dl,
         urgent: v('f-priority') === 'urgent', priority: v('f-priority'), notes: v('f-notes') };
       const row = (await q(sb.from('orders').insert({ clinic_id: clinic.id, doctor_id: doctor?.id || null, tech_id: tech?.id || null, data }).select())).at(0);
@@ -451,7 +460,10 @@
     clearTimeout(saveT);
     saveT = setTimeout(async () => {
       try {
-        await q(sb.from('settings').update({ value: { prices: SETTINGS.prices, docNum: SETTINGS.docNum, buyers: SETTINGS.buyers }, updated_at: new Date().toISOString() }).eq('key', 'lab'));
+        const now = new Date().toISOString();
+        LAB = Object.assign({}, LAB, { prices: SETTINGS.prices, docNum: SETTINGS.docNum, buyers: SETTINGS.buyers, techPercent: SETTINGS.techPercent });
+        await q(sb.from('settings').update({ value: LAB, updated_at: now }).eq('key', 'lab'));
+        await q(sb.from('settings').update({ value: { items: SERVICES.map(({ k, n, u }) => ({ k, n, u })) }, updated_at: now }).eq('key', 'catalog'));
         if (role() === 'owner') await q(sb.from('settings').update({ value: Object.assign({}, SETTINGS.seller, { vat: SETTINGS.vat }), updated_at: new Date().toISOString() }).eq('key', 'seller'));
       } catch (e) { err('Настройки не сохранены', e); }
     }, 400);
@@ -462,18 +474,16 @@
     catch (e) { err('Не сохранено', e); }
   };
   window.renderSettings = function () {
-    const priceCard = `<div class="p-card"><div class="p-card-ttl">Прайс-лист (цена за единицу)</div>
-      ${SERVICES.map(x => `<div class="set-row"><label style="width:240px">${esc(x.n)}</label><input class="set-input" type="number" min="0" step="100" style="max-width:140px" value="${priceOf(x.k)}" onchange="setPrice('${x.k}',this.value)"> ₽</div>`).join('')}
-      <div class="set-note">Цена подставляется в новые заказы. Техники и врачи цены не видят.</div></div>`;
     $('view-settings').innerHTML = `
       <div class="page-ttl">⚙️ Настройки</div><div class="page-sub">Данные хранятся на сервере и общие для всех сотрудников.</div>
       <div class="p-card"><div class="p-card-ttl">Профиль</div>
         <div class="set-row"><label for="set-name">Имя</label><input class="set-input" id="set-name" value="${esc(ME.full_name || '')}"></div>
         <div class="set-row"><label>Почта</label><span>${esc(ME.email)}</span></div>
         <div class="set-row"><label>Роль</label><span class="au-badge">${ROLE_N[role()]}</span>${ME.clinic_id ? '&nbsp;' + esc(clinicName(ME.clinic_id) || '') : ''}</div>
+        ${role() === 'tech' ? `<div class="set-row"><label>Ставка</label><span>${TECH_RATES[ME.id] ?? SETTINGS.techPercent ?? 0}% от суммы выполненной работы</span></div>` : ''}
         <div class="set-row"><label></label><button class="set-btn" onclick="saveProfile()">Сохранить</button><button class="set-btn sec" onclick="CLOUD_UI.changePassword()">Сменить пароль</button><button class="set-btn sec" onclick="CLOUD_UI.logout()">Выйти</button></div>
       </div>
-      ${role() === 'owner' ? sellerCard() : role() === 'lab_admin' ? priceCard : ''}
+      ${role() === 'owner' ? sellerCard() : ''}${isStaff() ? priceCard() + payCard() : ''}
       <div class="p-card"><div class="p-card-ttl">Данные</div>
         <div class="set-row"><button class="set-btn sec" onclick="exportCSV()">⬇️ Экспорт заказов в CSV</button>
         ${role() === 'owner' ? '<button class="set-btn sec" onclick="CLOUD_UI.seedDemo()">Загрузить демо-заказы</button>' : ''}</div>
@@ -496,11 +506,37 @@
       const cl = await q(sb.from('clinics').select('*'));
       const id = n => cl.find(c => c.name === n).id;
       const toIso = s => { const d = parseDl(s); return d ? d.toISOString() : new Date().toISOString(); };
-      const rows = DEMO_ORDERS.map(o => ({ clinic_id: id(o.clinic), stage: o.stage, created_at: toIso(o.cr), data: Object.assign(pickData(o), { demo: true }) }));
+      const tl = techs(), techFor = (o, i) => tl.find(t => t.full_name === o.tech) || tl[i % (tl.length || 1)];
+      const rows = DEMO_ORDERS.map((o, i) => ({ clinic_id: id(o.clinic), stage: o.stage, created_at: toIso(o.cr), tech_id: techFor(o, i)?.id || null,
+        done_at: o.stage >= 13 ? toIso(o.dl) : null, data: Object.assign(pickData(o), { demo: true }, techFor(o, i) ? { tech: techFor(o, i).full_name } : {}) }));
       const ins = await q(sb.from('orders').insert(rows).select('id'));
       await q(sb.from('order_prices').upsert(ins.map((r, i) => ({ order_id: r.id, price: DEMO_ORDERS[i].price }))));
       showToast('Демо-заказы добавлены', ins.length + ' шт.'); reload(0);
     } catch (e) { err('Не удалось добавить', e); }
+  };
+
+  // ── ЗАРПЛАТА ТЕХНИКОВ ───────────────────────────────────────────────────────
+  window.techList = () => techs().map(t => ({ id: t.id, name: t.full_name }));
+  window.techRate = id => TECH_RATES[id];
+  window.setTechRate = async function (id, val) {
+    try {
+      if (val === '' || val === null) { await q(sb.from('tech_rates').delete().eq('tech_id', id)); delete TECH_RATES[id]; }
+      else { const pc = Math.min(100, Math.max(0, +val || 0)); await q(sb.from('tech_rates').upsert({ tech_id: id, percent: pc, updated_at: new Date().toISOString() })); TECH_RATES[id] = pc; }
+      showToast('Ставка сохранена', (person(id)?.full_name || '') + ': ' + (TECH_RATES[id] ?? 'по умолчанию') + (id in TECH_RATES ? '%' : ''));
+    } catch (e) { err('Ставка не сохранена', e); }
+  };
+  window.payMode = () => role() === 'tech' ? 'tech' : 'staff';
+  window.payRows = async function () {
+    const [f, t] = payPeriod();
+    const data = await q(sb.rpc('tech_pay', { p_from: f ? f.toISOString() : null, p_to: t ? t.toISOString() : null }));
+    return data.map(r => ({ id: r.order_id, num: r.num, patient: r.patient, work: r.work || svcName(r.svc), units: +r.units, done: new Date(r.done_at),
+      tech_id: r.tech_id, tech: r.tech_name || '—', amount: r.amount === null ? null : +r.amount, percent: +r.percent, pay: +r.pay }));
+  };
+  window.recalcPay = async function () {
+    const [f, t] = payPeriod();
+    if (!confirm('Применить текущие ставки техников ко всем работам, выполненным за выбранный период?')) return;
+    try { const n = await q(sb.rpc('recalc_tech_pay', { p_from: f ? f.toISOString() : null, p_to: t ? t.toISOString() : null })); showToast('Пересчитано', n + ' работ'); renderPay(); }
+    catch (e) { err('Не пересчитано', e); }
   };
 
   // ── ПОЛЬЗОВАТЕЛИ И ПРИГЛАШЕНИЯ ──────────────────────────────────────────────
