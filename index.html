@@ -826,7 +826,7 @@ function bindDrop(id,onFiles){
   el.addEventListener('drop',e=>{e.preventDefault();el.classList.remove('drag');onFiles(e.dataTransfer.files);});
 }
 bindDrop('f-drop',addPending);
-bindDrop('dp-drop',addFilesToOrder);
+bindDrop('dp-drop',l=>addFilesToOrder(l));
 
 // ── СПРАВОЧНИКИ (запоминание введённых значений) ──────────────────────────────
 const DICT_KEY='ownlab_dict_v1';
@@ -1447,5 +1447,7 @@ renderOrders();
 openDetail('o1');
 switchTab('timeline', document.querySelectorAll('.det-tab')[1]);
 </script>
+<script src="config.js"></script>
+<script src="cloud.js"></script>
 </body>
 </html>
