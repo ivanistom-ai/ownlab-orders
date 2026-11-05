@@ -405,6 +405,12 @@ grant execute on function public.claim_owner(text), public.create_invite(text,te
   public.update_my_name(text), public.set_user(uuid,text,uuid,boolean), public.next_doc_num(text) to authenticated;
 grant execute on function public.invite_info(uuid), public.has_owner() to anon, authenticated;
 
+-- Доступ к таблицам через API (строки всё равно фильтруются RLS)
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on public.clinics, public.profiles, public.orders, public.order_prices,
+  public.order_comments, public.order_files, public.invites, public.settings to authenticated;
+grant usage, select on sequence public.order_num_seq to authenticated;
+
 -- ── ХРАНИЛИЩЕ ФАЙЛОВ ─────────────────────────────────────────────────────────
 -- Приватный бакет; путь файла начинается с id заказа
 insert into storage.buckets (id, name, public, file_size_limit)
