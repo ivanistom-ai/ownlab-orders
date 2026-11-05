@@ -850,6 +850,42 @@ do $$ begin
   begin alter publication supabase_realtime add table public.payments; exception when others then null; end;
 end $$;
 
+-- ══ 10. ШАБЛОНЫ ЗАКАЗОВ ═════════════════════════════════════════════════════
+create table if not exists public.order_templates (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade default auth.uid(),
+  name text not null check (length(name) between 1 and 100),
+  data jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+alter table public.order_templates enable row level security;
+drop policy if exists templates_own on public.order_templates;
+create policy templates_own on public.order_templates for all to authenticated
+  using (user_id = auth.uid() and public.my_role() is not null)
+  with check (user_id = auth.uid() and public.my_role() is not null);
+grant select, insert, update, delete on public.order_templates to authenticated;
+
+-- ══ 12. ВЫПЛАТЫ ТЕХНИКАМ ════════════════════════════════════════════════════
+create table if not exists public.tech_payouts (
+  id uuid primary key default gen_random_uuid(),
+  tech_id uuid not null references public.profiles(id) on delete cascade,
+  amount numeric not null check (amount > 0),
+  paid_at date not null default ((now() at time zone 'Europe/Moscow')::date),
+  note text not null default '',
+  created_by uuid references public.profiles(id) on delete set null default auth.uid(),
+  created_at timestamptz not null default now()
+);
+create index if not exists tech_payouts_tech_idx on public.tech_payouts(tech_id, paid_at);
+alter table public.tech_payouts enable row level security;
+drop policy if exists payouts_select on public.tech_payouts;
+create policy payouts_select on public.tech_payouts for select to authenticated
+  using (public.is_staff() or (public.my_role() = 'tech' and tech_id = auth.uid()));
+drop policy if exists payouts_write on public.tech_payouts;
+create policy payouts_write on public.tech_payouts for all to authenticated
+  using (public.is_staff()) with check (public.is_staff()
+    and exists (select 1 from public.profiles where id = tech_id and role = 'tech'));
+grant select, insert, update, delete on public.tech_payouts to authenticated;
+
 -- ── ДОЗАПОЛНЕНИЕ ДЛЯ УЖЕ СОЗДАННЫХ ЗАКАЗОВ ──────────────────────────────────
 alter table public.orders disable trigger orders_guard;
 update public.orders set done_at = coalesce(done_at, updated_at), tech_percent = coalesce(tech_percent, public.tech_percent_for(tech_id))
