@@ -128,9 +128,18 @@ on conflict (key) do nothing;
 
 -- ── ФУНКЦИИ-ПОМОЩНИКИ ДЛЯ ПРАВ ───────────────────────────────────────────────
 -- security definer, чтобы не было рекурсии в политиках profiles
+-- Если собственник включил обязательную 2FA, роль собственника/админа действует только после входа с кодом (aal2)
+create table if not exists public.app_config (key text primary key, value text not null);
+alter table public.app_config enable row level security;
+create or replace function public.mfa_required() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select value = 'on' from public.app_config where key = 'require_mfa_staff'), false)
+$$;
 create or replace function public.my_role() returns text
 language sql stable security definer set search_path = public as $$
-  select role from public.profiles where id = auth.uid() and active
+  select case when p.role in ('owner','lab_admin') and public.mfa_required()
+                   and coalesce(auth.jwt()->>'aal', '') <> 'aal2' then null else p.role end
+  from public.profiles p where p.id = auth.uid() and p.active
 $$;
 create or replace function public.my_clinic() returns uuid
 language sql stable security definer set search_path = public as $$
@@ -640,9 +649,6 @@ create table if not exists public.notify_queue (
 );
 alter table public.notify_queue enable row level security;
 
--- Служебные настройки (адрес функции notify); без политик — недоступны через API
-create table if not exists public.app_config (key text primary key, value text not null);
-alter table public.app_config enable row level security;
 
 create or replace function public.tg_link_code() returns text
 language plpgsql security definer set search_path = public as $$
@@ -885,6 +891,23 @@ create policy payouts_write on public.tech_payouts for all to authenticated
   using (public.is_staff()) with check (public.is_staff()
     and exists (select 1 from public.profiles where id = tech_id and role = 'tech'));
 grant select, insert, update, delete on public.tech_payouts to authenticated;
+
+-- ══ 15. ДВУХФАКТОРНЫЙ ВХОД ══════════════════════════════════════════════════
+create or replace function public.security_status() returns json
+language sql stable security definer set search_path = public as $$
+  select json_build_object('require_mfa_staff', public.mfa_required(), 'aal', coalesce(auth.jwt()->>'aal', ''))
+$$;
+-- Включать и выключать обязательную 2FA может только собственник, сам вошедший с кодом
+create or replace function public.set_require_mfa(p_on boolean) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'owner' and active) then raise exception 'Только собственник'; end if;
+  if coalesce(auth.jwt()->>'aal', '') <> 'aal2' then raise exception 'Сначала войдите с кодом из приложения-аутентификатора'; end if;
+  insert into public.app_config(key, value) values ('require_mfa_staff', case when p_on then 'on' else 'off' end)
+  on conflict (key) do update set value = excluded.value;
+end $$;
+revoke all on function public.set_require_mfa(boolean) from public, anon;
+grant execute on function public.set_require_mfa(boolean), public.security_status() to authenticated;
 
 -- ── ДОЗАПОЛНЕНИЕ ДЛЯ УЖЕ СОЗДАННЫХ ЗАКАЗОВ ──────────────────────────────────
 alter table public.orders disable trigger orders_guard;
