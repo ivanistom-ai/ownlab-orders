@@ -337,6 +337,10 @@ button,input,select,textarea{font-family:var(--font)}
 .u-table .set-input{padding:5px 7px;font-size:11px;min-width:0;width:100%}
 .u-scroll{overflow-x:auto}.u-link{font-family:var(--mono);font-size:10px;color:var(--t3);word-break:break-all}
 .pr-table td:last-child{text-align:center}
+.sb-cancel{background:var(--card2);color:var(--t3)}
+.order-card.c-cancel{opacity:.6}.order-card.c-cancel .c-patient{text-decoration:line-through}
+.ord-acts{gap:6px;margin-bottom:12px}.ord-acts .set-btn{padding:6px 10px}
+.doc-warn a{color:var(--org)}
 .r-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px 12px;margin-bottom:12px}
 .r-grid label{display:flex;flex-direction:column;gap:4px;font-size:10px;color:var(--t3);font-weight:600}
 .r-grid .set-input{min-width:0;width:100%}
@@ -659,7 +663,7 @@ const STAGES=[
   {e:'⭐',n:'Заказ завершён',c:'done',d:'Работа принята, отзыв получен.',s:['Отзыв получен','Архив сформирован']},
 ];
 
-const SBADGE={green:'sb-green',yellow:'sb-yellow',blue:'sb-blue',orange:'sb-orange',delivery:'sb-delivery',done:'sb-done'};
+const SBADGE={green:'sb-green',yellow:'sb-yellow',blue:'sb-blue',orange:'sb-orange',delivery:'sb-delivery',done:'sb-done',cancel:'sb-cancel'};
 const GROUPS=[['green','🟢','Приём / проверка'],['yellow','🟡','Анализ / план'],['blue','🔵','Производство'],['orange','🟠','Финишинг / QC'],['delivery','🚚','Доставка'],['done','✅','Завершённые']];
 
 // ── ДАТЫ ──────────────────────────────────────────────────────────────────────
@@ -746,11 +750,11 @@ function sortOrders(arr){
   const f={dl:(a,b)=>key(a)-key(b),created:(a,b)=>num(b)-num(a),num:(a,b)=>num(a)-num(b),prog:(a,b)=>b.prog-a.prog,patient:(a,b)=>a.patient.localeCompare(b.patient,'ru')}[sortBy];
   return arr.slice().sort((a,b)=>(isDone(a)-isDone(b))||f(a,b));
 }
-function statusName(s){if(s==='all')return'Все заказы';if(s==='active')return'Заказы в работе';const g=GROUPS.find(x=>x[0]===s);return g?g[2]:s;}
+function statusName(s){if(s==='all')return'Все заказы';if(s==='active')return'Заказы в работе';if(s==='cancel')return'Отменённые';const g=GROUPS.find(x=>x[0]===s);return g?g[2]:s;}
 function renderOrders(){
   const list=document.getElementById('ordersList');
   const filtered=sortOrders(ORDERS.filter(o=>{
-    const ms=fStatus==='all'||(fStatus==='active'?!isDone(o):o.color===fStatus);
+    const ms=fStatus==='all'||(fStatus==='active'?isActive(o):o.color===fStatus);
     const mt=fTech==='all'||o.tech===fTech;
     const mu=!fUrgent||o.urgent;
     return ms&&mt&&mu&&(!fSearch.trim()||matchQuery(o,fSearch));
@@ -765,7 +769,7 @@ function renderOrders(){
   updateCounts();
   if(!filtered.length){list.innerHTML=`<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">Заказы не найдены</div><div>Измените фильтр или создайте новый заказ</div>${chips.length?'<button class="empty-reset" onclick="resetFilters()">Сбросить все фильтры</button>':''}</div>`;return;}
   list.innerHTML=filtered.map(o=>{
-    const st=STAGES[o.stage-1], dleft=daysLeft(o), over=dleft!==null&&dleft<0&&!isDone(o);
+    const st=STAGES[o.stage-1], dleft=daysLeft(o), over=dleft!==null&&dleft<0&&isActive(o);
     return`<div class="order-card c-${o.color}${selId===o.id?' selected':''}" onclick="openDetail('${o.id}')">
       <div class="c-top">
         <span class="c-id">${esc(o.num)}</span>
@@ -775,7 +779,7 @@ function renderOrders(){
       </div>
       <div class="c-bot">
         <span class="c-clinic">🏥 ${esc(o.clinic)} · ${esc(o.tech)}</span>
-        <span class="status-badge ${SBADGE[o.color]}">${st.e} ${st.n}</span>
+        <span class="status-badge ${SBADGE[o.color]}">${o.cancelled?'❌ Отменён':st.e+' '+st.n}</span>${o.remakeOf?'<span class="status-badge sb-cancel" title="Переделка">🔁</span>':''}
       </div>
       <div class="progress-bar"><div class="progress-fill" style="width:${o.prog}%"></div></div>
     </div>`;
@@ -797,6 +801,9 @@ function closeDetail(){selId=null;document.getElementById('detPanel').classList.
 
 function renderInfoTab(o){
   const rows=[['Номер заказа',o.num,'var(--org)'],['Пациент',o.patient],['Клиника',o.clinic],['Врач',o.doctor||'—'],['Тип работы',o.type],['Единиц',o.units+' ед.'],['Зубы',o.teeth||'—'],['Материал',o.material||'—'],['Оттенок',o.shade||'—'],['Срок','📅 '+o.dl,o.urgent?'var(--red)':'var(--org)'],['Создан',o.cr||'—'],['Цена за ед.',rub(o.price)],['Сумма',rub(amt(o)),'var(--org)']];
+  let acts=document.getElementById('dp-acts');
+  if(!acts){acts=document.createElement('div');acts.id='dp-acts';document.getElementById('dp-info-rows').before(acts);}
+  acts.innerHTML=orderActs(o);
   document.getElementById('dp-info-rows').innerHTML=rows.map(([k,v,c])=>`<div class="info-row"><span class="ik">${k}</span><span class="iv"${c?` style="color:${c}"`:''} >${esc(v)}</span></div>`).join('');
   document.getElementById('dp-stage-lbl').textContent=`Этап ${o.stage} из 14: ${STAGES[o.stage-1].n}`;
   document.getElementById('dp-pct').textContent=o.prog+'%';
@@ -998,13 +1005,13 @@ function clearSearch(){setFilter({search:''});document.getElementById('searchInp
 // Счётчики в меню, на плашках и в блоке «Сегодня»
 function updateCounts(){
   const cnt=c=>ORDERS.filter(o=>o.color===c).length;
-  document.getElementById('status-nav').innerHTML=[['all','📋','Все заказы',ORDERS.length]].concat(GROUPS.map(g=>[g[0],g[1],g[2],cnt(g[0])]))
+  document.getElementById('status-nav').innerHTML=[['all','📋','Все заказы',ORDERS.length]].concat(GROUPS.map(g=>[g[0],g[1],g[2],cnt(g[0])])).concat(cnt('cancel')?[['cancel','❌','Отменённые',cnt('cancel')]]:[])
     .map(([s,e,n,c])=>`<div class="nav-item${curView==='orders'&&fStatus===s?' active':''}" onclick="filterStatus('${s}')">${e} ${n} <span class="nav-cnt">${c}</span></div>`).join('');
   const icons=['🔷','🔶','🔹','🔸','🟦','🟧'];
   document.getElementById('tech-nav').innerHTML=[['all','👥 Все техники']].concat(allTechs().map((t,i)=>[t,icons[i%icons.length]+' '+t]))
-    .map(([t,l])=>`<div class="nav-item${curView==='orders'&&fTech===t?' active':''}" onclick='filterTech(${JSON.stringify(t).replace(/'/g,"&#39;")})'>${esc(l)} ${t==='all'?'':`<span class="nav-cnt">${ORDERS.filter(o=>o.tech===t&&!isDone(o)).length}</span>`}</div>`).join('');
+    .map(([t,l])=>`<div class="nav-item${curView==='orders'&&fTech===t?' active':''}" onclick='filterTech(${JSON.stringify(t).replace(/'/g,"&#39;")})'>${esc(l)} ${t==='all'?'':`<span class="nav-cnt">${ORDERS.filter(o=>o.tech===t&&isActive(o)).length}</span>`}</div>`).join('');
   document.querySelectorAll('.nav-item[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===curView));
-  const active=ORDERS.filter(o=>!isDone(o));
+  const active=ORDERS.filter(isActive);
   const over=active.filter(o=>(daysLeft(o)??0)<0).length;
   document.getElementById('stat-active').textContent=active.length;
   document.getElementById('stat-urgent').textContent=active.filter(o=>o.urgent).length;
@@ -1045,7 +1052,7 @@ function renderUserMenu(){
 let seenNotif=0;
 function notifications(){
   const n=[];
-  ORDERS.filter(o=>!isDone(o)).forEach(o=>{
+  ORDERS.filter(isActive).forEach(o=>{
     const d=daysLeft(o), who=o.num+' · '+o.patient;
     if(d!==null&&d<0) n.push(['🔴','Просрочен срок',who+' · '+leftTxt(d),o.id]);
     else if(d===0) n.push(['📅','Срок сдачи сегодня',who,o.id]);
@@ -1111,6 +1118,7 @@ function reportOrders(){
   return ORDERS.filter(o=>{
     const d=orderDate(o);
     if(f&&(!d||d<f)||t&&(!d||d>t))return false;
+    if(o.cancelled)return false;
     if(R.clinic&&o.clinic!==R.clinic||R.tech&&o.tech!==R.tech||R.doctor&&o.doctor!==R.doctor||R.svc&&o.svc!==R.svc)return false;
     return R.status==='all'||(R.status==='done')===isDone(o);
   }).sort((a,b)=>(orderDate(a)||0)-(orderDate(b)||0));
@@ -1176,6 +1184,7 @@ function renderAnalytics(){
       <div class="kpi"><div class="kn" style="color:${over?'var(--red)':'var(--green)'}">${over}</div><div class="kl">Просрочено</div></div>
     </div>
     <div class="p-card"><div class="p-card-ttl">Отчёт по: ${GROUPBY[R.group][1].toLowerCase()} · ${periodTxt()}${filtersTxt()?' · '+esc(filtersTxt()):''}</div>${table}</div>
+    ${remakeCard(list)}
     <div class="p-grid">
       <div class="p-card"><div class="p-card-ttl">По этапам</div>${bars(st,mx(st),'filterStatus')}</div>
       <div class="p-card"><div class="p-card-ttl">Загрузка техников</div>${bars(techs,mx(techs),'filterTech')}</div>
@@ -1396,7 +1405,7 @@ function makeDoc(kind){
 
 function searchFor(q){setFilter({status:'all',tech:'all',urgent:false,search:q});}
 function renderDeadlines(){
-  const act=ORDERS.filter(o=>!isDone(o)).map(o=>[o,daysLeft(o)]).sort((a,b)=>(a[1]??1e9)-(b[1]??1e9));
+  const act=ORDERS.filter(isActive).map(o=>[o,daysLeft(o)]).sort((a,b)=>(a[1]??1e9)-(b[1]??1e9));
   const groups=[['🔴 Просрочено','var(--red)',d=>d!==null&&d<0],['📅 Сегодня','var(--org)',d=>d===0],['Завтра','var(--yellow)',d=>d===1],['Ближайшие 7 дней','var(--t2)',d=>d>1&&d<=7],['Позже','var(--t3)',d=>d>7],['Без срока','var(--t4)',d=>d===null]];
   const cls=d=>d===null?'ok':d<0?'over':d===0?'today':d<=2?'soon':'ok';
   document.getElementById('view-deadlines').innerHTML=`<div class="page-ttl">⏱ Сроки</div><div class="page-sub">Активные заказы по дате сдачи. Нажмите на заказ, чтобы открыть карточку.</div>`+
@@ -1452,7 +1461,13 @@ function sellerCard(){
     <div class="set-note">Цены в прайсе считаются итоговыми: при выборе ставки НДС налог выделяется из суммы. Перед отправкой клиентам документы стоит сверить с бухгалтером.</div>
   </div>`;
 }
-function fillPrice(){const k=document.getElementById('f-type').value;document.getElementById('f-price').value=k?priceOf(k):'';updSum();}
+function fillPrice(){
+  const k=document.getElementById('f-type').value, cl=document.getElementById('f-clinic').value.trim();
+  document.getElementById('f-price').value=k?priceFor(cl,k):''; updSum();
+  const dl=document.getElementById('f-deadline'), d=svcDays(k);
+  if(k&&d&&!dl.value){dl.value=iso(addWorkdays(new Date(),d));showToast('Срок подставлен по прайсу',d+' раб. дн.');}
+}
+document.getElementById('f-clinic').addEventListener('change',()=>{if(document.getElementById('f-type').value)fillPrice();});
 function updSum(){const s=(+document.getElementById('f-units').value||0)*(+document.getElementById('f-price').value||0);document.getElementById('f-sum').textContent=s?rub(s):'—';}
 function renderSettings(){
   const roles=['Администратор','Менеджер','Техник','Контроль качества'];
@@ -1482,7 +1497,7 @@ function renderSettings(){
 
 // ── ПРАЙС-ЛИСТ: ПОЗИЦИИ, ИМПОРТ, ЭКСПОРТ ─────────────────────────────────────
 const PR={q:'',imp:null,mode:'merge'};
-function saveCatalog(){SETTINGS.services=SERVICES.map(({k,n,u,p})=>({k,n,u,p}));saveSettings();}
+function saveCatalog(){SETTINGS.services=SERVICES.map(({k,n,u,p,d})=>({k,n,u,p,d}));saveSettings();}
 function usedBy(k){return ORDERS.filter(o=>o.svc===k).length;}
 function priceCard(){
   return `<div class="p-card"><div class="p-card-ttl">Прайс-лист · ${SERVICES.length} поз.</div>
@@ -1493,31 +1508,47 @@ function priceCard(){
       <button class="set-btn sec" onclick="exportPrice('csv')">⬇️ CSV</button>
       <input type="file" id="pr-file" hidden accept=".csv,.tsv,.txt,.xlsx,.xls,.ods,.json" onchange="importPrice(this.files[0]);this.value=''">
     </div>
-    <div class="u-scroll"><table class="u-table pr-table"><thead><tr><th style="width:110px">Код</th><th>Наименование</th><th style="width:70px">Ед.</th><th style="width:120px">Цена, ₽</th><th style="width:40px"></th></tr></thead><tbody id="pr-rows">${priceRows()}</tbody></table></div>
+    <div class="set-row"><label style="width:auto">Цены для</label><select class="set-input" style="flex:0 1 320px" onchange="PR.clinic=this.value;renderPriceRows()"><option value="">Базовый прайс (для всех)</option>${clinicNames().map(c=>`<option${PR.clinic===c?' selected':''}>${esc(c)}</option>`).join('')}</select>
+      <span id="pr-disc"></span></div>
+    <div class="u-scroll"><table class="u-table pr-table"><thead id="pr-head"></thead><tbody id="pr-rows">${priceRows()}</tbody></table></div>
     <div class="set-row" style="margin-top:10px">
       <input class="set-input" id="pr-n" placeholder="Новая позиция: наименование" onkeydown="if(event.key==='Enter')svcAdd()">
       <input class="set-input" id="pr-u" value="шт" style="flex:0 0 70px;min-width:0" title="Единица">
       <input class="set-input" id="pr-p" type="number" min="0" step="100" placeholder="Цена" style="flex:0 0 120px;min-width:0" onkeydown="if(event.key==='Enter')svcAdd()">
       <button class="set-btn" onclick="svcAdd()">＋ Добавить позицию</button>
     </div>
-    <div class="set-note">Изменения сохраняются сразу. Цена подставляется в новые заказы, у созданных заказов цена не меняется. Загрузка понимает CSV, TXT, Excel (XLSX, XLS), OpenOffice (ODS) и JSON: нужны столбцы «Наименование» и «Цена», «Код» и «Ед.» — по желанию.</div>
+    <div class="set-note">Изменения сохраняются сразу. Цена подставляется в новые заказы, у созданных заказов цена не меняется. «Дней» — срок изготовления в рабочих днях: по нему подставляется срок в новом заказе. Загрузка понимает CSV, TXT, Excel (XLSX, XLS), OpenOffice (ODS) и JSON: нужны столбцы «Наименование» и «Цена», «Код», «Ед.» и «Срок» — по желанию.</div>
   </div>`;
 }
 function priceRows(){
   const q=norm(PR.q.trim()), list=SERVICES.filter(x=>!q||norm(x.n+' '+x.k).includes(q));
+  setTimeout(priceHead);
+  if(PR.clinic){
+    const t=clinicTerms(PR.clinic)||{};
+    return list.map(x=>{const own=t.prices?.[x.k];return`<tr><td><span class="u-link">${esc(x.k)}</span></td><td>${esc(x.n)}</td><td style="text-align:right">${rub(priceOf(x.k))}</td>
+      <td><input class="set-input" type="number" min="0" step="100" value="${own??''}" placeholder="${priceFor(PR.clinic,x.k)}" onchange="setClinicPrice('${esc(x.k)}',this.value)"></td><td></td></tr>`;}).join('');
+  }
   return list.map(x=>`<tr><td><span class="u-link">${esc(x.k)}</span></td>
     <td><input class="set-input" value="${esc(x.n)}" onchange="svcEdit('${esc(x.k)}','n',this.value)"></td>
     <td><input class="set-input" value="${esc(x.u||'шт')}" onchange="svcEdit('${esc(x.k)}','u',this.value)"></td>
     <td><input class="set-input" type="number" min="0" step="100" value="${priceOf(x.k)}" onchange="svcEdit('${esc(x.k)}','p',this.value)"></td>
+    <td><input class="set-input" type="number" min="0" step="1" value="${x.d||''}" placeholder="—" title="Срок изготовления, рабочих дней" onchange="svcEdit('${esc(x.k)}','d',this.value)"></td>
     <td><button class="picked-del" title="Удалить позицию" onclick="svcDel('${esc(x.k)}')">✕</button></td></tr>`).join('')
-    ||`<tr><td colspan="5" class="set-note">${SERVICES.length?'Ничего не найдено':'Прайс пуст — добавьте позицию или загрузите файл'}</td></tr>`;
+    ||`<tr><td colspan="6" class="set-note">${SERVICES.length?'Ничего не найдено':'Прайс пуст — добавьте позицию или загрузите файл'}</td></tr>`;
 }
 function renderPriceRows(){const el=document.getElementById('pr-rows');if(el)el.innerHTML=priceRows();}
+function priceHead(){
+  const h=document.getElementById('pr-head'), d=document.getElementById('pr-disc'); if(!h)return;
+  h.innerHTML=PR.clinic?'<tr><th style="width:110px">Код</th><th>Наименование</th><th style="width:110px;text-align:right">Базовая</th><th style="width:140px">Для клиники, ₽</th><th></th></tr>'
+    :'<tr><th style="width:110px">Код</th><th>Наименование</th><th style="width:70px">Ед.</th><th style="width:120px">Цена, ₽</th><th style="width:70px" title="Срок изготовления, рабочих дней">Дней</th><th style="width:40px"></th></tr>';
+  d.innerHTML=PR.clinic?`Скидка на весь прайс <input class="set-input" type="number" min="0" max="100" step="0.5" style="flex:none;width:80px;min-width:0" value="${clinicTerms(PR.clinic)?.discount||0}" onchange="setClinicDiscount(this.value)"> % <span class="set-note" style="margin:0">— пустая ячейка: базовая цена со скидкой</span>`:'';
+}
 function svcEdit(k,f,v){
   const x=SERVICES.find(s=>s.k===k); if(!x)return;
   if(f==='p'){x.p=Math.max(0,+v||0);SETTINGS.prices[k]=x.p;}
+  else if(f==='d'){x.d=Math.max(0,parseInt(v)||0);}
   else{v=String(v).trim();if(!v&&f==='n'){showToast('Наименование не может быть пустым','','error');renderPriceRows();return;}x[f]=v||'шт';}
-  saveCatalog(); showToast('Прайс обновлён',x.n+(f==='p'?': '+rub(x.p):''));
+  saveCatalog(); showToast('Прайс обновлён',x.n+(f==='p'?': '+rub(x.p):f==='d'?': '+(x.d?x.d+' раб. дн.':'срок не задан'):''));
 }
 function newCode(){let k;do{k='svc_'+Math.random().toString(36).slice(2,7);}while(SERVICES.some(s=>s.k===k));return k;}
 function svcAdd(){
@@ -1556,7 +1587,7 @@ function parseMoney(v){
   return /^-?\d+(\.\d+)?$/.test(s)?+s:NaN;
 }
 function rowsToItems(rows){
-  const re={n:/наимен|услуг|назван|позиц|работ|name|item|service/i,p:/цен|стоим|руб|price|cost|тариф/i,k:/^код|артик|code|sku|^id$/i,u:/^ед|единиц|unit/i};
+  const re={n:/наимен|услуг|назван|позиц|работ|name|item|service/i,p:/цен|стоим|руб|price|cost|тариф/i,k:/^код|артик|code|sku|^id$/i,u:/^ед|единиц|unit/i,d:/срок|дн(ей|и)|days|duration/i};
   let h=-1,col={};
   for(let i=0;i<Math.min(rows.length,15)&&h<0;i++){
     const r=rows[i].map(c=>String(c??'')), f={};
@@ -1574,7 +1605,7 @@ function rowsToItems(rows){
   rows.slice(h+1).forEach(r=>{
     const n=String(r[col.n]??'').trim(), p=parseMoney(r[col.p]);
     if(!n||isNaN(p)||p<0)return;
-    items.push({k:col.k!==undefined?String(r[col.k]??'').trim():'',n,u:col.u!==undefined?String(r[col.u]??'').trim()||'шт':'шт',p:Math.round(p*100)/100});
+    items.push({k:col.k!==undefined?String(r[col.k]??'').trim():'',n,u:col.u!==undefined?String(r[col.u]??'').trim()||'шт':'шт',p:Math.round(p*100)/100,d:col.d!==undefined?parseInt(r[col.d])||0:undefined});
   });
   if(!items.length)throw new Error('В файле не найдено ни одной позиции с ценой');
   return items;
@@ -1622,7 +1653,8 @@ function applyImport(){
   I.items.forEach(it=>{
     const m=find(it), k=m?.k||it.k&&!next.some(s=>s.k===it.k)&&it.k||newCode();
     const ex=next.find(s=>s.k===k);
-    if(ex)Object.assign(ex,{n:it.n,u:it.u,p:it.p}); else next.push({k,n:it.n,u:it.u,p:it.p});
+    const d=it.d!==undefined?it.d:ex?.d;
+    if(ex)Object.assign(ex,{n:it.n,u:it.u,p:it.p,d}); else next.push({k,n:it.n,u:it.u,p:it.p,d});
     SETTINGS.prices[k]=it.p;
   });
   SERVICES.splice(0,SERVICES.length,...next);
@@ -1631,11 +1663,11 @@ function applyImport(){
   showToast('Прайс загружен',SERVICES.length+' позиций в прайсе');
 }
 async function exportPrice(fmt){
-  const rows=[['Код','Наименование','Ед.','Цена, ₽']].concat(SERVICES.map(x=>[x.k,x.n,x.u||'шт',priceOf(x.k)]));
+  const rows=[['Код','Наименование','Ед.','Цена, ₽','Срок, раб. дн.']].concat(SERVICES.map(x=>[x.k,x.n,x.u||'шт',priceOf(x.k),x.d||'']));
   const name='ownlab-price-'+new Date().toISOString().slice(0,10);
   if(fmt==='csv'){downloadCSV(rows.map(r=>r.map((v,i)=>i===3?num2(v):v)),name+'.csv');return;}
   try{
-    await loadXLSX(); const ws=XLSX.utils.aoa_to_sheet(rows); ws['!cols']=[{wch:14},{wch:48},{wch:8},{wch:12}];
+    await loadXLSX(); const ws=XLSX.utils.aoa_to_sheet(rows); ws['!cols']=[{wch:14},{wch:48},{wch:8},{wch:12},{wch:14}];
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Прайс'); XLSX.writeFile(wb,name+'.xlsx');
   }catch(e){showToast('Excel недоступен',e.message+' · скачан CSV','warning');exportPrice('csv');}
 }
@@ -1724,7 +1756,7 @@ async function renderPay(){
         <tfoot><tr><td>Итого</td><td class="n">${list.length}</td><td class="n">${units}</td><td class="n">${rub(sum)}</td><td></td><td class="n">${rub(pay)}</td></tr></tfoot></table></div>`
         :'<div class="pop-empty">За выбранный период выполненных работ с назначенным техником нет</div>'}</div>`;
   }else{
-    const active=ORDERS.filter(o=>!isDone(o)).length, rate=list[0]?.percent??techRate(window.CLOUD_API?.me?.id)??SETTINGS.techPercent;
+    const active=ORDERS.filter(isActive).length, rate=list[0]?.percent??techRate(window.CLOUD_API?.me?.id)??SETTINGS.techPercent;
     const byM={}; list.forEach(r=>{const k=iso(r.done).slice(0,7);byM[k]=(byM[k]||0)+r.pay;});
     const mrows=Object.entries(byM).sort().map(([k,v])=>[monthLabel(k),v,rub(v)]);
     body=`<div class="kpi-row">
@@ -1754,6 +1786,150 @@ function printPay(){
 }
 async function recalcPay(){showToast('Пересчёт доступен после подключения сервера','','warning');}
 
+// ── ПРАВКА, ОТМЕНА И ПЕРЕДЕЛКА ЗАКАЗА ────────────────────────────────────────
+// Права по умолчанию (демо); cloud.js задаёт их по ролям
+function canEdit(o){return !o.cancelled;}
+function canCancel(o){return true;}
+function canRemake(o){return !o.cancelled;}
+function isActive(o){return !isDone(o)&&!o.cancelled;}
+const REMAKE_REASONS=['Не подошло по посадке','Скол / поломка','Не совпал цвет','Окклюзия / контакты','Ошибка в данных врача (скан, оттиск)','Пожелание пациента','Другое'];
+function orderActs(o){
+  const b=[];
+  b.push(`<button class="set-btn sec" onclick="printWorkOrder('${o.id}')">🏷 Печать наряда</button>`);
+  if(canEdit(o))b.push(`<button class="set-btn sec" onclick="openEditOrder('${o.id}')">✏️ Изменить</button>`);
+  if(canRemake(o))b.push(`<button class="set-btn sec" onclick="openRemake('${o.id}')">🔁 Переделка</button>`);
+  if(canCancel(o))b.push(o.cancelled?`<button class="set-btn sec" onclick="restoreOrder('${o.id}')">↺ Вернуть в работу</button>`:`<button class="set-btn danger" onclick="cancelOrder('${o.id}')">Отменить заказ</button>`);
+  const rm=o.remakeOf?ORDERS.find(x=>x.id===o.remakeOf):null, kids=ORDERS.filter(x=>x.remakeOf===o.id);
+  return `${o.cancelled?`<div class="doc-warn">❌ Заказ отменён${o.cancelReason?': '+esc(o.cancelReason):''}</div>`:''}
+    ${o.remakeOf?`<div class="doc-warn" style="background:var(--org-d)">🔁 Переделка${rm?` заказа <a href="#" onclick="openDetail('${rm.id}');return false">${esc(rm.num)}</a>`:''}${o.remakeReason?' · '+esc(o.remakeReason):''} · ${o.remakeBy==='clinic'?'за счёт клиники':'за счёт лаборатории'}</div>`:''}
+    ${kids.length?`<div class="set-note" style="margin:0 0 8px">Переделки: ${kids.map(k=>`<a href="#" onclick="openDetail('${k.id}');return false">${esc(k.num)}</a>`).join(', ')}</div>`:''}
+    <div class="set-row ord-acts">${b.join('')}</div>`;
+}
+function svcOptions(cur){return SERVICES.map(x=>`<option value="${esc(x.k)}"${x.k===cur?' selected':''}>${esc(x.n)}</option>`).join('');}
+const dmy2iso=s=>{const d=parseDl(s);return d?iso(d):'';};
+const iso2dmy=s=>{const d=fromIso(s);return d?d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'}):'—';};
+function openEditOrder(id){
+  const o=ORDERS.find(x=>x.id===id); if(!o)return;
+  const f=(k,l,v,t='text')=>`<div class="form-group"><label class="form-label">${l}</label><input class="form-input" id="e-${k}" type="${t}" value="${esc(v??'')}"></div>`;
+  document.getElementById('docModal').innerHTML=`
+    <div class="modal-title">✏️ Изменить заказ ${esc(o.num)}</div><div class="modal-sub">${esc(o.clinic)} · ${esc(o.doctor)}</div>
+    <div class="form-row">${f('patient','Пациент',o.patient)}${f('dl','Срок',dmy2iso(o.dl),'date')}</div>
+    <div class="form-group"><label class="form-label">Услуга</label><select class="form-select" id="e-svc">${svcOptions(o.svc)}</select></div>
+    <div class="form-row">${f('units','Единиц',o.units,'number')}${f('teeth','Зубы',o.teeth==='—'?'':o.teeth)}</div>
+    <div class="form-row">${f('shade','Оттенок',o.shade==='—'?'':o.shade)}${f('material','Материал',o.material==='—'?'':o.material)}</div>
+    <label class="chk"><input type="checkbox" id="e-urgent"${o.urgent?' checked':''}> ⚡ Срочный</label>
+    <div class="set-note">Изменения попадут в историю заказа${window.CLOUD?', технику придёт уведомление':''}.</div>
+    <div class="modal-actions"><button class="modal-btn cancel" onclick="closeDoc()">Отмена</button><button class="modal-btn primary" onclick="saveOrderEdit('${o.id}')">Сохранить</button></div>`;
+  document.getElementById('docOverlay').classList.add('open');
+}
+function editValues(){
+  const v=k=>document.getElementById('e-'+k).value.trim();
+  if(!v('patient')){showToast('Укажите пациента','','error');return null;}
+  const svc=v('svc');
+  return{patient:v('patient'),svc,type:svcName(svc),units:Math.max(1,parseInt(v('units'))||1),teeth:v('teeth')||'—',shade:v('shade')||'—',material:v('material')||'—',dl:v('dl')?iso2dmy(v('dl')):'—',urgent:document.getElementById('e-urgent').checked};
+}
+async function saveOrderEdit(id){
+  const o=ORDERS.find(x=>x.id===id), p=editValues(); if(!o||!p)return;
+  Object.assign(o,p); closeDoc(); renderOrders(); openDetail(id); showToast('Заказ изменён',o.num);
+}
+async function cancelOrder(id){
+  const o=ORDERS.find(x=>x.id===id); if(!o)return;
+  const r=prompt('Отменить заказ '+o.num+'? Укажите причину:','');
+  if(r===null)return;
+  Object.assign(o,{cancelled:true,cancelReason:r.trim(),color:'cancel'}); renderOrders(); openDetail(id); showToast('Заказ отменён',o.num,'warning');
+}
+async function restoreOrder(id){
+  const o=ORDERS.find(x=>x.id===id); if(!o)return;
+  Object.assign(o,{cancelled:false,cancelReason:'',color:STAGES[o.stage-1].c}); renderOrders(); openDetail(id); showToast('Заказ снова в работе',o.num);
+}
+function openRemake(id){
+  const o=ORDERS.find(x=>x.id===id); if(!o)return;
+  const d=new Date(); d.setDate(d.getDate()+Math.max(1,svcDays(o.svc)||5));
+  document.getElementById('docModal').innerHTML=`
+    <div class="modal-title">🔁 Переделка ${esc(o.num)}</div><div class="modal-sub">${esc(o.patient)} · ${esc(o.type)} · техник ${esc(o.tech)}</div>
+    <div class="form-group"><label class="form-label">Причина</label><select class="form-select" id="rm-reason">${REMAKE_REASONS.map(r=>`<option>${esc(r)}</option>`).join('')}</select></div>
+    <div class="form-group"><label class="form-label">Подробности</label><input class="form-input" id="rm-note" placeholder="что именно не так"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">За чей счёт</label><select class="form-select" id="rm-by"><option value="lab">Лаборатории (бесплатно для клиники)</option><option value="clinic">Клиники (по прайсу)</option></select></div>
+      <div class="form-group"><label class="form-label">Новый срок</label><input class="form-input" id="rm-dl" type="date" value="${iso(d)}"></div>
+    </div>
+    <div class="set-note">Создастся новый заказ с теми же данными и пометкой «переделка». ${window.CLOUD?'Переделки за счёт лаборатории не входят в начисления клинике и в зарплату техника.':''}</div>
+    <div class="modal-actions"><button class="modal-btn cancel" onclick="closeDoc()">Отмена</button><button class="modal-btn primary" onclick="createRemake('${o.id}')">Создать переделку</button></div>`;
+  document.getElementById('docOverlay').classList.add('open');
+}
+function remakeValues(){
+  const v=k=>document.getElementById('rm-'+k).value.trim();
+  return{reason:v('reason')+(v('note')?': '+v('note'):''),by:v('by'),dl:v('dl')?iso2dmy(v('dl')):'—'};
+}
+async function createRemake(id){
+  const o=ORDERS.find(x=>x.id===id), r=remakeValues(); if(!o)return;
+  const num='#OWN-'+String(Math.max(0,...ORDERS.map(x=>parseInt(String(x.num).replace(/\D/g,''))||0))+1).padStart(4,'0');
+  const n=Object.assign({},o,{id:'o'+Date.now(),num,stage:1,prog:4,color:'green',cr:dIn(0),dl:r.dl,files:[],comments:[],remakeOf:o.id,remakeReason:r.reason,remakeBy:r.by,price:r.by==='lab'?0:o.price,cancelled:false,doneAt:''});
+  ORDERS.unshift(n); closeDoc(); renderOrders(); openDetail(n.id); showToast('Переделка создана',num+' · '+r.reason);
+}
+function remakeCard(list){
+  const rm=list.filter(o=>o.remakeOf), base=list.filter(o=>!o.remakeOf).length;
+  if(!rm.length)return'';
+  const orig=o=>ORDERS.find(x=>x.id===o.remakeOf)||o;
+  const by=f=>countBy(rm,f), mx=a=>Math.max(1,...a.map(r=>r[1]));
+  const reasons=by(o=>(o.remakeReason||'—').split(':')[0]), techs=by(o=>orig(o).tech), clin=by(o=>o.clinic);
+  return `<div class="p-card"><div class="p-card-ttl">🔁 Переделки · ${rm.length} из ${base+rm.length} (${base?(rm.length/base*100).toFixed(1):0}%) · за счёт лаборатории ${rm.filter(o=>o.remakeBy!=='clinic').length}</div>
+    <div class="p-grid"><div><div class="set-note">Причины</div>${bars(reasons,mx(reasons),'searchFor')}</div><div><div class="set-note">По техникам (исходный заказ)</div>${bars(techs,mx(techs),'filterTech')}</div><div><div class="set-note">По клиникам</div>${bars(clin,mx(clin),'searchFor')}</div></div></div>`;
+}
+
+// ── СРОКИ ИЗГОТОВЛЕНИЯ ───────────────────────────────────────────────────────
+function svcDays(k){return +SERVICES.find(s=>s.k===k)?.d||0;}
+function addWorkdays(d,n){d=new Date(d);while(n>0){d.setDate(d.getDate()+1);if(d.getDay()%6)n--;}return d;}
+
+// ── ДОГОВОРНЫЕ ЦЕНЫ КЛИНИК ───────────────────────────────────────────────────
+if(!SETTINGS.clinicPricing)SETTINGS.clinicPricing={};
+function clinicNames(){return uniq(ORDERS.map(o=>o.clinic)).sort((a,b)=>a.localeCompare(b,'ru'));}
+function clinicTerms(name){return SETTINGS.clinicPricing[name]||null;}
+async function setClinicTerms(name,patch){
+  const t=SETTINGS.clinicPricing[name]=Object.assign({discount:0,prices:{}},SETTINGS.clinicPricing[name],patch);
+  saveSettings(); return t;
+}
+function priceFor(clinic,k){
+  const t=clinic?clinicTerms(clinic):null, base=priceOf(k);
+  if(!t)return base;
+  const own=t.prices?.[k];
+  return own!==undefined&&own!==''&&own!==null?+own:Math.round(base*(1-(+t.discount||0)/100)*100)/100;
+}
+async function setClinicDiscount(v){
+  const name=PR.clinic; if(!name)return;
+  await setClinicTerms(name,{discount:Math.min(100,Math.max(0,+v||0))}); renderPriceRows(); showToast('Скидка сохранена',name+': '+(+v||0)+'%');
+}
+async function setClinicPrice(k,v){
+  const name=PR.clinic; if(!name)return;
+  const prices=Object.assign({},clinicTerms(name)?.prices);
+  if(v===''||v===null)delete prices[k]; else prices[k]=Math.max(0,+v||0);
+  await setClinicTerms(name,{prices}); renderPriceRows(); showToast('Цена для клиники',name+' · '+svcName(k)+': '+(v===''?'по прайсу':rub(+v)));
+}
+
+// ── ПЕЧАТЬ ЗАКАЗ-НАРЯДА С QR-КОДОМ ───────────────────────────────────────────
+function loadQR(){
+  if(window.qrcode)return Promise.resolve();
+  return new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';s.onload=ok;s.onerror=()=>no(new Error('Не удалось загрузить модуль QR-кода'));document.head.appendChild(s);});
+}
+function orderLink(o){return location.origin+location.pathname+'?order='+encodeURIComponent(o.id);}
+async function printWorkOrder(id){
+  const o=ORDERS.find(x=>x.id===id); if(!o)return;
+  let svg='';
+  try{await loadQR();const q=qrcode(0,'M');q.addData(orderLink(o));q.make();svg=q.createSvgTag({cellSize:4,margin:2,scalable:true});}
+  catch(e){showToast('QR-код не создан',e.message,'warning');}
+  const tz=(o.comments||[]).filter(c=>/^ТЗ:/.test(c.t)).map(c=>c.t.replace(/^ТЗ:\s*/,'')).concat(o.notes&&!(o.comments||[]).some(c=>c.t==='ТЗ: '+o.notes)?[o.notes]:[]).join('\n');
+  const row=(k,v)=>`<tr><td style="width:150px">${k}</td><td><b>${esc(v||'—')}</b></td></tr>`;
+  const label=`<div class="lbl"><div class="lbl-q">${svg}</div><div class="lbl-t"><div class="lbl-n">${esc(o.num)}</div><div>${esc(o.patient)}</div><div>${esc(o.clinic)}</div><div>${esc(svcName(o.svc))} · ${o.units} ед.</div><div><b>Срок: ${esc(o.dl)}</b>${o.urgent?' ⚡':''}</div></div></div>`;
+  openDocWindow('Заказ-наряд '+o.num,`<style>@page{size:A4 portrait;margin:12mm}.wo-h{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}.wo-q{width:120px}.wo-q svg{width:120px;height:120px}
+    .lbl{width:60mm;height:40mm;border:1px dashed #000;display:flex;gap:6px;padding:3mm;box-sizing:border-box;font-size:9px;line-height:1.3;margin-top:8px}.lbl-q{width:26mm;flex:none}.lbl-q svg{width:26mm;height:26mm}.lbl-n{font-size:12px;font-weight:bold}.tz{white-space:pre-wrap;border:1px solid #000;padding:6px;min-height:60px}</style>
+    <div class="wo-h"><div><h1>Заказ-наряд ${esc(o.num)}${o.urgent?' · СРОЧНО':''}</h1><div class="small">${esc(SETTINGS.seller?.name||'OWN Digital Laboratory')} · создан ${esc(o.cr||'')}</div></div><div class="wo-q">${svg}<div class="small c">Сканируйте, чтобы открыть заказ</div></div></div>
+    <table class="nb" style="margin-top:10px">${row('Пациент',o.patient)}${row('Клиника',o.clinic)}${row('Врач',o.doctor)}${row('Техник',o.tech)}${row('Работа',svcName(o.svc)+(o.type&&o.type!==svcName(o.svc)?' ('+o.type+')':''))}${row('Единиц',String(o.units))}${row('Зубы',o.teeth)}${row('Материал',o.material)}${row('Оттенок',o.shade)}${row('Срок сдачи',o.dl)}${o.remakeOf?row('Переделка',o.remakeReason||'да'):''}</table>
+    <p><b>Техническое задание:</b></p><div class="tz">${esc(tz||'—')}</div>
+    <p><b>Отметки по этапам:</b></p><table><tr><th>Этап</th><th style="width:110px">Дата</th><th style="width:160px">Исполнитель</th><th style="width:90px">Подпись</th></tr>
+      ${['Приём и проверка','CAD-моделирование','Производство','Финишная обработка','Контроль качества','Упаковка и отправка'].map(s=>`<tr><td>${s}</td><td></td><td></td><td></td></tr>`).join('')}</table>
+    <p class="small">Наклейка на коробку (вырежьте по пунктиру):</p>${label}`);
+}
+
 // ── МОДАЛКА ───────────────────────────────────────────────────────────────────
 function openModal(){fillTypeSelect();document.getElementById('modalOverlay').classList.add('open');}
 function fillTypeSelect(){
@@ -1772,7 +1948,7 @@ function submitOrder(){
   const dlRaw=document.getElementById('f-deadline').value;
   const dl=dlRaw?new Date(dlRaw).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'}):'—';
   const techVal=document.getElementById('f-tech').value.trim();
-  const newO={id:'o'+Date.now(),num,patient:document.getElementById('f-patient').value.trim(),clinic:document.getElementById('f-clinic').value.trim(),doctor:document.getElementById('f-doctor').value.trim()||'—',type:svcName(document.getElementById('f-type').value),units:parseInt(document.getElementById('f-units').value)||1,shade:document.getElementById('f-shade').value||'—',material:document.getElementById('f-material').value||'—',teeth:document.getElementById('f-teeth').value||'—',dl,cr:dIn(0),svc:document.getElementById('f-type').value,price:+document.getElementById('f-price').value||priceOf(document.getElementById('f-type').value),tech:techVal||'—',tk:techVal.split(' ')[0],color:'green',stage:1,prog:4,urgent:document.getElementById('f-priority').value==='urgent',files:pendingFiles.map(toFileObj),comments:[]};
+  const newO={id:'o'+Date.now(),num,patient:document.getElementById('f-patient').value.trim(),clinic:document.getElementById('f-clinic').value.trim(),doctor:document.getElementById('f-doctor').value.trim()||'—',type:svcName(document.getElementById('f-type').value),units:parseInt(document.getElementById('f-units').value)||1,shade:document.getElementById('f-shade').value||'—',material:document.getElementById('f-material').value||'—',teeth:document.getElementById('f-teeth').value||'—',dl,cr:dIn(0),svc:document.getElementById('f-type').value,price:+document.getElementById('f-price').value||priceFor(document.getElementById('f-clinic').value.trim(),document.getElementById('f-type').value),tech:techVal||'—',tk:techVal.split(' ')[0],color:'green',stage:1,prog:4,urgent:document.getElementById('f-priority').value==='urgent',files:pendingFiles.map(toFileObj),comments:[]};
   DICT_FIELDS.forEach(k=>remember(k,newO[k]));
   pendingFiles=[]; renderPending();
   ORDERS.unshift(newO); closeModal(); renderOrders(); openDetail(newO.id);
@@ -1804,9 +1980,10 @@ function toggleNav(on){document.body.classList.toggle('nav-open',on);}
 // ── СТАРТ ─────────────────────────────────────────────────────────────────────
 applySettings();
 renderOrders();
-if(innerWidth>820){openDetail('o1');switchTab('timeline', document.querySelectorAll('.det-tab')[1]);}
+if(!window.OWNLAB_CONFIG?.url&&new URLSearchParams(location.search).get('order'))setTimeout(()=>openDetail(new URLSearchParams(location.search).get('order')));
+else if(innerWidth>820){openDetail('o1');switchTab('timeline', document.querySelectorAll('.det-tab')[1]);}
 </script>
-<script src="config.js?v=7"></script>
-<script src="cloud.js?v=7"></script>
+<script src="config.js?v=8"></script>
+<script src="cloud.js?v=8"></script>
 </body>
 </html>

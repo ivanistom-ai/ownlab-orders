@@ -10,7 +10,7 @@
   const BUCKET = 'order-files', MAX_CLOUD_FILE = 50 * 1024 * 1024;
   const TOKEN_KEY = 'ownlab_pending_invite';
   const DEMO_ORDERS = ORDERS.slice();
-  let sb = null, ME = null, CLINICS = [], PEOPLE = [], INVITES = [], LAB = {}, SELLER = {}, TECH_RATES = {}, BOT = null, MY_TG = null;
+  let sb = null, ME = null, CLINICS = [], PEOPLE = [], INVITES = [], LAB = {}, SELLER = {}, TECH_RATES = {}, BOT = null, MY_TG = null, CLINIC_PRICING = {};
   const orig = { renderInfoTab, renderTL, renderAnalytics, showView, renderUserMenu, updateCounts, doAction, openModal };
 
   const $ = id => document.getElementById(id);
@@ -201,13 +201,15 @@
       auth.classList.add('hide');
       if (!started) { started = true; subscribe(); }
       selId = null; $('detPanel').classList.remove('open'); showView('orders');
+      const link = new URLSearchParams(location.search).get('order');
+      if (link) { if (ORDERS.some(o => o.id === link)) openDetail(link); else showToast('Заказ не найден', 'Нет доступа или заказ удалён', 'warning'); history.replaceState(null, '', location.pathname); }
     } catch (e) { err('Ошибка загрузки', e); showLogin(e.message); }
   }
 
   // ── ЗАГРУЗКА ДАННЫХ ─────────────────────────────────────────────────────────
   async function loadAll() {
     const none = Promise.resolve({ data: [] });
-    const [cl, pp, ord, pr, cm, fl, st, inv, tr, evs, tgr] = await Promise.all([
+    const [cl, pp, ord, pr, cm, fl, st, inv, tr, evs, tgr, cpr] = await Promise.all([
       sb.from('clinics').select('*').order('name'),
       sb.from('profiles').select('*').order('full_name'),
       sb.from('orders').select('*').order('created_at', { ascending: false }),
@@ -219,8 +221,10 @@
       isStaff() || role() === 'tech' ? sb.from('tech_rates').select('*') : none,
       sb.from('order_events').select('*').order('created_at'),
       sb.from('user_telegram').select('*'),
+      isStaff() ? sb.from('clinic_pricing').select('*') : none,
     ]);
-    for (const r of [cl, pp, ord, pr, cm, fl, st, inv, tr, evs, tgr]) if (r.error) throw r.error;
+    for (const r of [cl, pp, ord, pr, cm, fl, st, inv, tr, evs, tgr, cpr]) if (r.error) throw r.error;
+    CLINIC_PRICING = Object.fromEntries(cpr.data.map(x => [x.clinic_id, { discount: +x.discount, prices: x.prices || {} }]));
     MY_TG = tgr.data[0] || null;
     TECH_RATES = Object.fromEntries(tr.data.map(x => [x.tech_id, +x.percent]));
     CLINICS = cl.data; PEOPLE = pp.data; INVITES = inv.data;
@@ -230,7 +234,7 @@
     const cms = by(cm.data, 'order_id'), fls = by(fl.data, 'order_id'), ev = by(evs.data, 'order_id');
     let catalog = null;
     st.data.forEach(s => { if (s.key === 'lab') LAB = s.value; if (s.key === 'seller') SELLER = s.value; if (s.key === 'catalog') catalog = s.value.items; if (s.key === 'bot') BOT = s.value; });
-    if (Array.isArray(catalog) && catalog.length) SERVICES.splice(0, SERVICES.length, ...catalog.map(i => ({ k: i.k, n: i.n, u: i.u || 'шт', p: +(LAB.prices || {})[i.k] || 0 })));
+    if (Array.isArray(catalog) && catalog.length) SERVICES.splice(0, SERVICES.length, ...catalog.map(i => ({ k: i.k, n: i.n, u: i.u || 'шт', d: +i.d || 0, p: +(LAB.prices || {})[i.k] || 0 })));
     Object.assign(SETTINGS, {
       name: ME.full_name || ME.email, initials: initialsOf(ME.full_name || ME.email), role: ROLE_N[ME.role],
       seller: Object.assign({ name: 'OWN Digital Laboratory' }, SELLER), vat: SELLER.vat || 'none',
@@ -249,7 +253,8 @@
     return Object.assign({}, d, {
       id: r.id, num: r.num, clinic_id: r.clinic_id, doctor_id: r.doctor_id, tech_id: r.tech_id,
       clinic: clinicName(r.clinic_id) || d.clinic || '—', doctor: person(r.doctor_id)?.full_name || d.doctor || '—',
-      tech: techName, tk: techName.split(' ')[0], stage: st, color: STAGES[st - 1].c, prog: st === 14 ? 100 : Math.max(4, Math.round(st / 14 * 100)),
+      tech: techName, tk: techName.split(' ')[0], stage: st, color: r.cancelled_at ? 'cancel' : STAGES[st - 1].c,
+      cancelled: !!r.cancelled_at, cancelReason: r.cancel_reason || '', prog: st === 14 ? 100 : Math.max(4, Math.round(st / 14 * 100)),
       cr: d.cr || ruDT(r.created_at), price: price ?? 0, units: +d.units || 1, doneAt: r.done_at ? ruDT(r.done_at) : '',
       comments: comments.map(c => ({ av: initialsOf(c.author_name || '?'), rc: c.author_role === 'tech' ? 'tech' : 'admin', au: c.author_name || '—', role: ROLE_N[c.author_role] || '', t: c.body, time: new Date(c.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) })),
       files: files.map(f => ({ n: f.name, size: f.size, path: f.path })),
@@ -392,7 +397,12 @@
     const evs = (o.events || []).filter(e => (e.kind === 'stage' && e.to_stage === n) || (e.kind === 'created' && e.to_stage === n));
     return evs[evs.length - 1];
   }
+  const FIELD_N = { patient: 'пациент', svc: 'услуга', type: 'тип работы', units: 'единиц', teeth: 'зубы', shade: 'оттенок', material: 'материал', dl: 'срок', urgent: 'срочность', notes: 'ТЗ', trackNum: 'трек-номер', priority: 'приоритет' };
   function eventText(e) {
+    if (e.kind === 'edit') return 'Изменено: ' + e.info.split(',').map(k => FIELD_N[k] || k).join(', ');
+    if (e.kind === 'cancel') return '❌ Заказ отменён' + (e.info ? ': ' + e.info : '');
+    if (e.kind === 'restore') return '↺ Заказ возвращён в работу';
+    if (e.kind === 'remake') return '🔁 Создана переделка ' + e.info;
     if (e.kind === 'created') return 'Заказ создан' + (e.to_stage > 1 ? ' на этапе ' + e.to_stage : '');
     if (e.kind === 'tech') return e.info === 'снят' ? 'Техник снят с заказа' : 'Назначен техник: ' + e.info;
     return (e.to_stage < e.from_stage ? '↩ Возврат на этап ' : 'Этап ') + e.to_stage + ': ' + STAGES[e.to_stage - 1].n;
@@ -430,7 +440,7 @@
   };
 
   // ── ЗАПИСЬ ИЗМЕНЕНИЙ ────────────────────────────────────────────────────────
-  const DATA_KEYS = ['patient', 'clinic', 'doctor', 'tech', 'type', 'units', 'shade', 'material', 'teeth', 'dl', 'cr', 'svc', 'urgent', 'priority', 'notes', 'trackNum', 'trackSt', 'needsData'];
+  const DATA_KEYS = ['patient', 'clinic', 'doctor', 'tech', 'type', 'units', 'shade', 'material', 'teeth', 'dl', 'cr', 'svc', 'urgent', 'priority', 'notes', 'trackNum', 'trackSt', 'needsData', 'remakeOf', 'remakeReason', 'remakeBy'];
   const pickData = o => Object.fromEntries(DATA_KEYS.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 
   window.doAction = async function (action, id) {
@@ -531,7 +541,7 @@
         const now = new Date().toISOString();
         LAB = Object.assign({}, LAB, { prices: SETTINGS.prices, docNum: SETTINGS.docNum, buyers: SETTINGS.buyers, techPercent: SETTINGS.techPercent });
         await q(sb.from('settings').update({ value: LAB, updated_at: now }).eq('key', 'lab'));
-        await q(sb.from('settings').update({ value: { items: SERVICES.map(({ k, n, u }) => ({ k, n, u })) }, updated_at: now }).eq('key', 'catalog'));
+        await q(sb.from('settings').update({ value: { items: SERVICES.map(({ k, n, u, d }) => ({ k, n, u, d: +d || 0 })) }, updated_at: now }).eq('key', 'catalog'));
         if (role() === 'owner') await q(sb.from('settings').update({ value: Object.assign({}, SETTINGS.seller, { vat: SETTINGS.vat }), updated_at: new Date().toISOString() }).eq('key', 'seller'));
       } catch (e) { err('Настройки не сохранены', e); }
     }, 400);
@@ -606,6 +616,52 @@
     if (!confirm('Применить текущие ставки техников ко всем работам, выполненным за выбранный период?')) return;
     try { const n = await q(sb.rpc('recalc_tech_pay', { p_from: f ? f.toISOString() : null, p_to: t ? t.toISOString() : null })); showToast('Пересчитано', n + ' работ'); renderPay(); }
     catch (e) { err('Не пересчитано', e); }
+  };
+
+  // ── ПРАВКА, ОТМЕНА, ПЕРЕДЕЛКА ───────────────────────────────────────────────
+  const clinicEditable = o => isClinic() && o.stage <= 2 && !o.cancelled;
+  window.canEdit = o => !o.cancelled && (isStaff() || clinicEditable(o));
+  window.canCancel = o => isStaff() || clinicEditable(o);
+  window.canRemake = o => isStaff() && !o.cancelled;
+  window.saveOrderEdit = async function (id) {
+    const o = ORDERS.find(x => x.id === id), p = editValues(); if (!o || !p) return;
+    try {
+      await q(sb.from('orders').update({ data: Object.assign(pickData(o), p) }).eq('id', id));
+      if (isStaff() && p.svc !== o.svc) await q(sb.from('order_prices').upsert({ order_id: id, price: priceFor(o.clinic, p.svc) }));
+      closeDoc(); showToast('Заказ изменён', o.num); reload(0);
+    } catch (e) { err('Не сохранено', e); }
+  };
+  window.cancelOrder = async function (id) {
+    const o = ORDERS.find(x => x.id === id); if (!o) return;
+    const r = prompt('Отменить заказ ' + o.num + '? Укажите причину (её увидят участники заказа):', ''); if (r === null) return;
+    try { await q(sb.from('orders').update({ cancelled_at: new Date().toISOString(), cancel_reason: r.trim() }).eq('id', id)); showToast('Заказ отменён', o.num, 'warning'); reload(0); }
+    catch (e) { err('Не отменён', e); }
+  };
+  window.restoreOrder = async function (id) {
+    try { await q(sb.from('orders').update({ cancelled_at: null }).eq('id', id)); showToast('Заказ снова в работе'); reload(0); }
+    catch (e) { err('Не удалось', e); }
+  };
+  window.createRemake = async function (id) {
+    const o = ORDERS.find(x => x.id === id), r = remakeValues(); if (!o) return;
+    try {
+      const data = Object.assign(pickData(o), { dl: r.dl, remakeOf: o.id, remakeReason: r.reason, remakeBy: r.by, cr: undefined });
+      delete data.cr; delete data.trackNum; delete data.trackSt; delete data.needsData;
+      const row = (await q(sb.from('orders').insert({ clinic_id: o.clinic_id, doctor_id: o.doctor_id, tech_id: o.tech_id, data }).select())).at(0);
+      await sb.from('order_comments').insert({ order_id: row.id, body: 'Переделка заказа ' + o.num + ': ' + r.reason });
+      closeDoc(); showToast('Переделка создана', row.num + ' · ' + (r.by === 'lab' ? 'за счёт лаборатории' : 'за счёт клиники'));
+      await loadAll(); renderOrders(); openDetail(row.id);
+    } catch (e) { err('Переделка не создана', e); }
+  };
+
+  // ── ДОГОВОРНЫЕ ЦЕНЫ КЛИНИК ──────────────────────────────────────────────────
+  window.clinicNames = () => CLINICS.map(c => c.name);
+  window.clinicTerms = name => { const c = CLINICS.find(x => x.name === name); return c ? CLINIC_PRICING[c.id] || null : null; };
+  window.setClinicTerms = async function (name, patch) {
+    const c = CLINICS.find(x => x.name === name); if (!c) return;
+    const t = Object.assign({ discount: 0, prices: {} }, CLINIC_PRICING[c.id], patch);
+    try { await q(sb.from('clinic_pricing').upsert({ clinic_id: c.id, discount: t.discount, prices: t.prices, updated_at: new Date().toISOString() })); CLINIC_PRICING[c.id] = t; }
+    catch (e) { err('Не сохранено', e); }
+    return t;
   };
 
   // ── УВЕДОМЛЕНИЯ В TELEGRAM ──────────────────────────────────────────────────
