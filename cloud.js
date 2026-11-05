@@ -234,7 +234,7 @@
     const cms = by(cm.data, 'order_id'), fls = by(fl.data, 'order_id'), ev = by(evs.data, 'order_id');
     let catalog = null;
     st.data.forEach(s => { if (s.key === 'lab') LAB = s.value; if (s.key === 'seller') SELLER = s.value; if (s.key === 'catalog') catalog = s.value.items; if (s.key === 'bot') BOT = s.value; });
-    if (Array.isArray(catalog) && catalog.length) SERVICES.splice(0, SERVICES.length, ...catalog.map(i => ({ k: i.k, n: i.n, u: i.u || 'шт', d: +i.d || 0, p: +(LAB.prices || {})[i.k] || 0 })));
+    if (Array.isArray(catalog) && catalog.length) SERVICES.splice(0, SERVICES.length, ...catalog.map(i => ({ k: i.k, n: i.n, u: i.u || 'шт', d: +i.d || 0, p: +(LAB.prices || {})[i.k] || 0, c: +(LAB.costs || {})[i.k] || 0 })));
     Object.assign(SETTINGS, {
       name: ME.full_name || ME.email, initials: initialsOf(ME.full_name || ME.email), role: ROLE_N[ME.role],
       seller: Object.assign({ name: 'OWN Digital Laboratory' }, SELLER), vat: SELLER.vat || 'none',
@@ -254,7 +254,7 @@
       id: r.id, num: r.num, clinic_id: r.clinic_id, doctor_id: r.doctor_id, tech_id: r.tech_id,
       clinic: clinicName(r.clinic_id) || d.clinic || '—', doctor: person(r.doctor_id)?.full_name || d.doctor || '—',
       tech: techName, tk: techName.split(' ')[0], stage: st, color: r.cancelled_at ? 'cancel' : STAGES[st - 1].c,
-      cancelled: !!r.cancelled_at, cancelReason: r.cancel_reason || '', prog: st === 14 ? 100 : Math.max(4, Math.round(st / 14 * 100)),
+      cancelled: !!r.cancelled_at, cancelReason: r.cancel_reason || '', techPercent: r.tech_percent === null || r.tech_percent === undefined ? null : +r.tech_percent, prog: st === 14 ? 100 : Math.max(4, Math.round(st / 14 * 100)),
       cr: d.cr || ruDT(r.created_at), price: price ?? 0, units: +d.units || 1, doneAt: r.done_at ? ruDT(r.done_at) : '',
       comments: comments.map(c => ({ av: initialsOf(c.author_name || '?'), rc: c.author_role === 'tech' ? 'tech' : 'admin', au: c.author_name || '—', role: ROLE_N[c.author_role] || '', t: c.body, time: new Date(c.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) })),
       files: files.map(f => ({ n: f.name, size: f.size, path: f.path })),
@@ -480,11 +480,15 @@
     const n = await uploadFiles(selId, files);
     if (n) { showToast('Файлы добавлены', n + ' шт.'); reload(0); }
   };
-  window.openFile = async function (oid, i) {
-    const f = ORDERS.find(x => x.id === oid)?.files?.[i]; if (!f?.path) return;
-    const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(f.path, 600, /\.(jpe?g|png|pdf)$/i.test(f.n) ? undefined : { download: f.n });
-    if (error) return err('Файл недоступен', error);
-    window.open(data.signedUrl, '_blank', 'noopener');
+  const URLS = {};
+  window.fileUrl = async function (f, download) {
+    if (!f?.path) return null;
+    const key = f.path + (download ? '#d' : ''), c = URLS[key];
+    if (c && c.t > Date.now()) return c.u;
+    const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(f.path, 900, download ? { download: f.n } : undefined);
+    if (error) { err('Файл недоступен', error); return null; }
+    URLS[key] = { u: data.signedUrl, t: Date.now() + 800e3 };
+    return data.signedUrl;
   };
 
   // Новый заказ: поля по роли
@@ -539,7 +543,8 @@
     saveT = setTimeout(async () => {
       try {
         const now = new Date().toISOString();
-        LAB = Object.assign({}, LAB, { prices: SETTINGS.prices, docNum: SETTINGS.docNum, buyers: SETTINGS.buyers, techPercent: SETTINGS.techPercent });
+        LAB = Object.assign({}, LAB, { prices: SETTINGS.prices, docNum: SETTINGS.docNum, buyers: SETTINGS.buyers, techPercent: SETTINGS.techPercent,
+          costs: Object.fromEntries(SERVICES.filter(x => +x.c).map(x => [x.k, +x.c])) });
         await q(sb.from('settings').update({ value: LAB, updated_at: now }).eq('key', 'lab'));
         await q(sb.from('settings').update({ value: { items: SERVICES.map(({ k, n, u, d }) => ({ k, n, u, d: +d || 0 })) }, updated_at: now }).eq('key', 'catalog'));
         if (role() === 'owner') await q(sb.from('settings').update({ value: Object.assign({}, SETTINGS.seller, { vat: SETTINGS.vat }), updated_at: new Date().toISOString() }).eq('key', 'seller'));
@@ -653,6 +658,12 @@
     } catch (e) { err('Переделка не создана', e); }
   };
 
+  window.canCreate = () => role() !== 'tech';
+  window.canSeeProfit = () => isStaff();
+  window.tplList = async () => (await q(sb.from('order_templates').select('id,name,data').order('name'))) || [];
+  window.tplSave = async (name, data) => { try { await q(sb.from('order_templates').insert({ name, data })); } catch (e) { err('Шаблон не сохранён', e); } };
+  window.tplDelete = async id => { try { await q(sb.from('order_templates').delete().eq('id', id)); } catch (e) { err('Не удалось', e); } };
+
   // ── ДОГОВОРНЫЕ ЦЕНЫ КЛИНИК ──────────────────────────────────────────────────
   window.clinicNames = () => CLINICS.map(c => c.name);
   window.clinicTerms = name => { const c = CLINICS.find(x => x.name === name); return c ? CLINIC_PRICING[c.id] || null : null; };
@@ -727,7 +738,7 @@
     try {
       const [b, d, p] = await Promise.all([
         q(sb.rpc('clinic_balances', { p_from: BAL.from || null, p_to: BAL.to || null })),
-        q(sb.from('documents').select('id,clinic_id,kind,number,doc_date,total,title').order('doc_date', { ascending: false })),
+        q(sb.from('documents').select('id,clinic_id,kind,number,doc_date,total,vat,title,order_ids').order('doc_date', { ascending: false })),
         q(sb.from('payments').select('*').order('paid_at', { ascending: false })),
       ]);
       BAL_DATA = b; BAL_DOCS = d; BAL_PAYS = p;
@@ -745,7 +756,9 @@
         <label>Период${sel}</label>
         <label>С даты<input type="date" class="set-input" value="${BAL.from}" onchange="CLOUD_UI.setBal('from',this.value)"></label>
         <label>По дату<input type="date" class="set-input" value="${BAL.to}" onchange="CLOUD_UI.setBal('to',this.value)"></label></div>
-        <div class="r-actions"><button class="set-btn sec" onclick="CLOUD_UI.balCSV()">⬇️ Выгрузить в Excel</button></div></div>
+        <div class="r-actions"><button class="set-btn sec" onclick="CLOUD_UI.balCSV()">⬇️ Сальдо в Excel</button>
+        ${isStaff() ? '<button class="set-btn sec" onclick="CLOUD_UI.export1C(\'sales\')">⬇️ Реализации для 1С</button><button class="set-btn sec" onclick="CLOUD_UI.export1C(\'pays\')">⬇️ Оплаты для 1С</button>' : ''}</div>
+        ${isStaff() ? '<div class="set-note">Файлы для 1С — таблица Excel: «Реализации» по выполненным работам (с номером накладной, если она выписана) и «Оплаты» по поступлениям. В 1С: «Загрузка данных из табличного документа» или передайте бухгалтеру. ИНН и КПП клиник берутся из окна «Счёт, накладная, счёт-фактура».</div>' : ''}</div>
       ${isStaff() ? `<div class="kpi-row">
         <div class="kpi"><div class="kn" style="color:var(--org)">${rub(S('accrued'))}</div><div class="kl">Начислено за период</div></div>
         <div class="kpi"><div class="kn" style="color:var(--green)">${rub(S('paid'))}</div><div class="kl">Оплачено за период</div></div>
@@ -817,6 +830,80 @@
           <div class="sign"><div>От ${esc(s.name || 'лаборатории')}<br><br>Руководитель <span class="ln"></span> / ${esc(s.head || '')} /<br><br>Главный бухгалтер <span class="ln"></span> / ${esc(s.acc || '')} /<br><br>М.П.</div>
           <div>От ${esc(c)}<br><br>Руководитель <span class="ln"></span> / <span class="ln"></span> /<br><br>Главный бухгалтер <span class="ln"></span> / <span class="ln"></span> /<br><br>М.П.</div></div>`);
       } catch (e) { err('Акт не сформирован', e); }
+    },
+  });
+
+  // ── ВЫГРУЗКА ДЛЯ 1С ─────────────────────────────────────────────────────────
+  window.CLOUD_UI.export1C = async function (kind) {
+    const f = BAL.from ? fromIso(BAL.from) : null, t = BAL.to ? fromIso(BAL.to) : null;
+    const inP = d => d && (!f || d >= f) && (!t || d <= t);
+    const r = vatRate(), vatOf = sum => r ? Math.round(sum * r / (100 + r) * 100) / 100 : 0, buyer = n => SETTINGS.buyers[n] || {};
+    let rows, name;
+    if (kind === 'sales') {
+      const docFor = id => { const ds = BAL_DOCS.filter(d => (d.order_ids || []).includes(id)); return ds.find(d => d.kind === 'nak') || ds.find(d => d.kind === 'inv') || ds[0]; };
+      rows = [['Дата', 'Документ', 'Контрагент', 'ИНН', 'КПП', 'Номенклатура', 'Количество', 'Ед. изм.', 'Цена', 'Сумма', 'Ставка НДС', 'Сумма НДС', 'Заказ']];
+      ORDERS.filter(o => !o.cancelled && o.doneAt && inP(parseDl(o.doneAt)) && amt(o) > 0).sort((a, b) => parseDl(a.doneAt) - parseDl(b.doneAt)).forEach(o => {
+        const d = docFor(o.id), b = buyer(o.clinic), sum = amt(o);
+        rows.push([o.doneAt, d ? KIND_N[d.kind] + ' № ' + d.number + ' от ' + ruDT(d.doc_date) : '', o.clinic, b.inn || '', b.kpp || '', svcName(o.svc), +o.units || 0,
+          SERVICES.find(x => x.k === o.svc)?.u || 'шт', Math.round(sum / (+o.units || 1) * 100) / 100, sum, r ? r + '%' : 'Без НДС', vatOf(sum), o.num]);
+      });
+      name = 'realizacii';
+    } else {
+      rows = [['Дата', 'Контрагент', 'ИНН', 'КПП', 'Сумма', 'Способ оплаты', 'Назначение']];
+      BAL_PAYS.filter(p => inP(fromIso(p.paid_at))).sort((a, b) => a.paid_at.localeCompare(b.paid_at)).forEach(p => {
+        const c = clinicName(p.clinic_id) || '', b = buyer(c), d = BAL_DOCS.find(x => x.id === p.document_id);
+        rows.push([ruDT(p.paid_at), c, b.inn || '', b.kpp || '', +p.amount, p.method, [d ? 'Оплата по ' + { inv: 'счёту на оплату', nak: 'накладной', sf: 'счёту-фактуре' }[d.kind] + ' № ' + d.number + ' от ' + ruDT(d.doc_date) : 'Оплата за работы', p.note].filter(Boolean).join('; ')]);
+      });
+      name = 'oplaty';
+    }
+    if (rows.length < 2) return showToast('Нет данных за период', 'Измените период', 'warning');
+    const file = 'ownlab-1c-' + name + '-' + (BAL.from || 'all') + '_' + (BAL.to || '');
+    try {
+      await loadXLSX(); const ws = XLSX.utils.aoa_to_sheet(rows); ws['!cols'] = rows[0].map((h, i) => ({ wch: Math.max(10, ...rows.map(r => String(r[i] ?? '').length)) }));
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, kind === 'sales' ? 'Реализации' : 'Оплаты'); XLSX.writeFile(wb, file + '.xlsx');
+    } catch (e) { downloadCSV(rows.map(r => r.map(v => typeof v === 'number' ? num2(v) : v)), file + '.csv'); }
+    showToast('Выгружено для 1С', (rows.length - 1) + ' строк');
+  };
+
+  // ── ВЫПЛАТЫ ТЕХНИКАМ ────────────────────────────────────────────────────────
+  const origRenderPay = window.renderPay;
+  let PAYOUTS = [], PAY_ALL = [];
+  window.renderPay = async function () {
+    await origRenderPay();
+    if (curView !== 'pay' || !(isStaff() || role() === 'tech')) return;
+    try { [PAYOUTS, PAY_ALL] = await Promise.all([q(sb.from('tech_payouts').select('*').order('paid_at', { ascending: false })), q(sb.rpc('tech_pay', { p_from: null, p_to: null }))]); }
+    catch (e) { return err('Выплаты не загрузились', e); }
+    const acc = {}, paid = {};
+    PAY_ALL.forEach(r => acc[r.tech_id] = (acc[r.tech_id] || 0) + +r.pay);
+    PAYOUTS.forEach(p => paid[p.tech_id] = (paid[p.tech_id] || 0) + +p.amount);
+    $('payouts-card')?.remove();
+    const card = document.createElement('div'); card.className = 'p-card'; card.id = 'payouts-card';
+    const hist = list => list.length ? `<table class="rep-in">${list.slice(0, 50).map(p => `<tr><td>${ruDT(p.paid_at)}</td>${isStaff() ? `<td>${esc(person(p.tech_id)?.full_name || '—')}</td>` : ''}<td class="n"><b>${rub(+p.amount)}</b></td><td>${esc(p.note || '')}</td><td>${isStaff() ? `<button class="picked-del" title="Удалить выплату" onclick="CLOUD_UI.delPayout('${p.id}')">✕</button>` : ''}</td></tr>`).join('')}</table>` : '<div class="set-note">Выплат пока нет</div>';
+    if (isStaff()) {
+      const ids = [...new Set(techs().map(t => t.id).concat(Object.keys(acc)))];
+      card.innerHTML = `<div class="p-card-ttl">💸 Выплаты техникам (за всё время)</div><div style="overflow-x:auto"><table class="rep"><thead><tr><th>Техник</th><th class="n">Начислено</th><th class="n">Выплачено</th><th class="n">Остаток к выплате</th><th>Выплатить</th></tr></thead><tbody>
+        ${ids.map(id => { const a = acc[id] || 0, p = paid[id] || 0, rest = Math.round((a - p) * 100) / 100; return `<tr><td>${esc(person(id)?.full_name || '—')}</td><td class="n">${rub(a)}</td><td class="n">${rub(p)}</td><td class="n" style="color:${rest > 0 ? 'var(--org)' : 'inherit'}"><b>${rub(rest)}</b></td>
+          <td><div class="set-row" style="margin:0;flex-wrap:nowrap"><input class="set-input" id="po-${id}" type="number" min="0" step="100" value="${rest > 0 ? rest : ''}" style="flex:0 0 110px;min-width:0"><input class="set-input" id="pn-${id}" placeholder="комментарий" style="flex:0 0 140px;min-width:0"><button class="set-btn" onclick="CLOUD_UI.addPayout('${id}')">＋</button></div></td></tr>`; }).join('') || '<tr><td colspan="5" class="pop-empty">Техников нет</td></tr>'}
+        </tbody></table></div><div class="p-card-ttl" style="margin-top:12px">История выплат</div>${hist(PAYOUTS)}`;
+    } else {
+      const a = acc[ME.id] || 0, p = paid[ME.id] || 0;
+      card.innerHTML = `<div class="p-card-ttl">💸 Мои выплаты</div><div class="kpi-row" style="margin-bottom:8px">
+        <div class="kpi"><div class="kn">${rub(a)}</div><div class="kl">Начислено всего</div></div>
+        <div class="kpi"><div class="kn" style="color:var(--green)">${rub(p)}</div><div class="kl">Выплачено</div></div>
+        <div class="kpi"><div class="kn" style="color:var(--org)">${rub(a - p)}</div><div class="kl">Остаток к выплате</div></div></div>${hist(PAYOUTS)}`;
+    }
+    $('view-pay').appendChild(card);
+  };
+  Object.assign(window.CLOUD_UI, {
+    async addPayout(id) {
+      const amount = +$('po-' + id).value; if (!(amount > 0)) return showToast('Укажите сумму', '', 'error');
+      if (!confirm(`Записать выплату ${rub(amount)} — ${person(id)?.full_name || ''}?`)) return;
+      try { await q(sb.from('tech_payouts').insert({ tech_id: id, amount, note: $('pn-' + id).value.trim() })); showToast('Выплата записана', rub(amount)); renderPay(); }
+      catch (e) { err('Не записано', e); }
+    },
+    async delPayout(id) {
+      if (!confirm('Удалить запись о выплате?')) return;
+      try { await q(sb.from('tech_payouts').delete().eq('id', id)); showToast('Выплата удалена', '', 'warning'); renderPay(); } catch (e) { err('Не удалось', e); }
     },
   });
 

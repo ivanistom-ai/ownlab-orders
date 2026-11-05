@@ -341,6 +341,25 @@ button,input,select,textarea{font-family:var(--font)}
 .order-card.c-cancel{opacity:.6}.order-card.c-cancel .c-patient{text-decoration:line-through}
 .ord-acts{gap:6px;margin-bottom:12px}.ord-acts .set-btn{padding:6px 10px}
 .doc-warn a{color:var(--org)}
+.mv-wrap{display:none;position:fixed;inset:0;z-index:650;background:rgba(0,0,0,.6);padding:16px}
+.mv-wrap.open{display:flex}
+.mv-box,.lb-box{background:var(--card);border-radius:12px;flex:1;display:flex;flex-direction:column;overflow:hidden;max-width:1200px;margin:auto;height:100%}
+.mv-head{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.mv-info{font-size:11px;color:var(--t3);font-family:var(--mono)}.mv-btns{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.mv-canvas{flex:1;min-height:200px;position:relative;touch-action:none}.mv-canvas canvas{display:block}
+.mv-hint{font-size:10px;color:var(--t4);padding:6px 14px;border-top:1px solid var(--border)}
+.lb-stage{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;background:#111;min-height:0}
+.lb-stage img{max-width:calc(100% - 100px);max-height:100%;object-fit:contain}
+.lb-nav{background:rgba(255,255,255,.12);color:#fff;border:0;font-size:34px;width:44px;height:64px;border-radius:8px;cursor:pointer}
+.lb-strip{display:flex;gap:6px;padding:8px;overflow-x:auto;background:var(--card2)}
+.lb-strip img{height:54px;width:72px;object-fit:cover;border-radius:4px;cursor:pointer;opacity:.6;border:2px solid transparent}
+.lb-strip img.on{opacity:1;border-color:var(--org)}
+.file-item{position:relative;overflow:hidden}.file-item.has-thumb{min-height:84px;display:flex;flex-direction:column;justify-content:flex-end}
+.file-thumb{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .2s}
+.thumb-ok .file-thumb{opacity:1}.thumb-ok .file-name{position:relative;background:rgba(255,255,255,.85);border-radius:3px}
+.file-3d{position:absolute;top:4px;right:4px;background:var(--org);color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px}
+.tpl-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}.tpl-bar .form-select{flex:1;min-width:180px}
+@media (max-width:820px){.mv-wrap{padding:0}.mv-box,.lb-box{border-radius:0}.lb-stage img{max-width:100%}.lb-nav{position:absolute;z-index:2}.lb-nav:first-child{left:4px}.lb-nav:last-child{right:4px}.lb-stage{position:relative}}
 .r-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px 12px;margin-bottom:12px}
 .r-grid label{display:flex;flex-direction:column;gap:4px;font-size:10px;color:var(--t3);font-weight:600}
 .r-grid .set-input{min-width:0;width:100%}
@@ -849,7 +868,9 @@ function renderFiles(o){
   const icons={stl:'🦷',ply:'🦷',obj:'🦷','3dm':'💻',dcm:'🩻',dicom:'🩻',jpg:'📸',jpeg:'📸',png:'📸',heic:'📸',pdf:'📄',zip:'🗜️'};
   const el=document.getElementById('dp-files');
   if(!(o.files?.length)){el.innerHTML=`<div style="grid-column:1/-1;color:var(--t4);font-size:11px">Файлов пока нет</div>`;return;}
-  el.innerHTML=o.files.map((f,i)=>{const ext=f.n.split('.').pop().toLowerCase();return`<div class="file-item" onclick="openFile('${o.id}',${i})" title="${esc(f.n)}"><span class="file-icon">${icons[ext]||f.i||'📎'}</span><div class="file-name">${esc(f.n)}</div></div>`;}).join('');
+  el.innerHTML=o.files.map((f,i)=>{const ext=f.n.split('.').pop().toLowerCase(), img=IMG_EXT.test(f.n), m3=MODEL_EXT.test(f.n);
+    return`<div class="file-item${img?' has-thumb':''}" onclick="openFile('${o.id}',${i})" title="${esc(f.n)}">${img?`<img class="file-thumb" data-fi="${i}" alt="">`:''}<span class="file-icon">${icons[ext]||f.i||'📎'}</span>${m3?'<span class="file-3d">3D</span>':''}<div class="file-name">${esc(f.n)}</div></div>`;}).join('');
+  o.files.forEach(async(f,i)=>{if(!IMG_EXT.test(f.n))return;const u=await fileUrl(f);const im=el.querySelector(`img[data-fi="${i}"]`);if(u&&im){im.onload=()=>im.parentElement.classList.add('thumb-ok');im.src=u;}});
 }
 
 // ── ФАЙЛЫ ─────────────────────────────────────────────────────────────────────
@@ -874,12 +895,12 @@ function addFilesToOrder(list){
   o.files=(o.files||[]).concat(ok.map(toFileObj));
   renderFiles(o); showToast('Файлы добавлены',ok.length+' шт. · '+o.num);
 }
-function openFile(oid,i){
+async function openFile(oid,i){
   const f=ORDERS.find(x=>x.id===oid)?.files?.[i]; if(!f) return;
-  if(!f.url){showToast(f.n,'Демо-файл — содержимого нет','warning');return;}
-  const a=document.createElement('a'); a.href=f.url;
-  if(/\.(jpe?g|png|pdf)$/i.test(f.n)) a.target='_blank'; else a.download=f.n;
-  a.click();
+  if(MODEL_EXT.test(f.n))return openModel(f);
+  if(IMG_EXT.test(f.n))return openGallery(oid,i);
+  const u=await fileUrl(f,!/\.pdf$/i.test(f.n)); if(!u){showToast(f.n,'Демо-файл — содержимого нет','warning');return;}
+  if(/\.pdf$/i.test(f.n))window.open(u,'_blank','noopener'); else downloadFile(f);
 }
 function bindDrop(id,onFiles){
   const el=document.getElementById(id);
@@ -1184,6 +1205,7 @@ function renderAnalytics(){
       <div class="kpi"><div class="kn" style="color:${over?'var(--red)':'var(--green)'}">${over}</div><div class="kl">Просрочено</div></div>
     </div>
     <div class="p-card"><div class="p-card-ttl">Отчёт по: ${GROUPBY[R.group][1].toLowerCase()} · ${periodTxt()}${filtersTxt()?' · '+esc(filtersTxt()):''}</div>${table}</div>
+    ${profitCard(list)}
     ${remakeCard(list)}
     <div class="p-grid">
       <div class="p-card"><div class="p-card-ttl">По этапам</div>${bars(st,mx(st),'filterStatus')}</div>
@@ -1497,7 +1519,7 @@ function renderSettings(){
 
 // ── ПРАЙС-ЛИСТ: ПОЗИЦИИ, ИМПОРТ, ЭКСПОРТ ─────────────────────────────────────
 const PR={q:'',imp:null,mode:'merge'};
-function saveCatalog(){SETTINGS.services=SERVICES.map(({k,n,u,p,d})=>({k,n,u,p,d}));saveSettings();}
+function saveCatalog(){SETTINGS.services=SERVICES.map(({k,n,u,p,d,c})=>({k,n,u,p,d,c}));saveSettings();}
 function usedBy(k){return ORDERS.filter(o=>o.svc===k).length;}
 function priceCard(){
   return `<div class="p-card"><div class="p-card-ttl">Прайс-лист · ${SERVICES.length} поз.</div>
@@ -1533,22 +1555,24 @@ function priceRows(){
     <td><input class="set-input" value="${esc(x.u||'шт')}" onchange="svcEdit('${esc(x.k)}','u',this.value)"></td>
     <td><input class="set-input" type="number" min="0" step="100" value="${priceOf(x.k)}" onchange="svcEdit('${esc(x.k)}','p',this.value)"></td>
     <td><input class="set-input" type="number" min="0" step="1" value="${x.d||''}" placeholder="—" title="Срок изготовления, рабочих дней" onchange="svcEdit('${esc(x.k)}','d',this.value)"></td>
+    <td><input class="set-input" type="number" min="0" step="10" value="${x.c||''}" placeholder="—" title="Себестоимость материалов на единицу" onchange="svcEdit('${esc(x.k)}','c',this.value)"></td>
     <td><button class="picked-del" title="Удалить позицию" onclick="svcDel('${esc(x.k)}')">✕</button></td></tr>`).join('')
-    ||`<tr><td colspan="6" class="set-note">${SERVICES.length?'Ничего не найдено':'Прайс пуст — добавьте позицию или загрузите файл'}</td></tr>`;
+    ||`<tr><td colspan="7" class="set-note">${SERVICES.length?'Ничего не найдено':'Прайс пуст — добавьте позицию или загрузите файл'}</td></tr>`;
 }
 function renderPriceRows(){const el=document.getElementById('pr-rows');if(el)el.innerHTML=priceRows();}
 function priceHead(){
   const h=document.getElementById('pr-head'), d=document.getElementById('pr-disc'); if(!h)return;
   h.innerHTML=PR.clinic?'<tr><th style="width:110px">Код</th><th>Наименование</th><th style="width:110px;text-align:right">Базовая</th><th style="width:140px">Для клиники, ₽</th><th></th></tr>'
-    :'<tr><th style="width:110px">Код</th><th>Наименование</th><th style="width:70px">Ед.</th><th style="width:120px">Цена, ₽</th><th style="width:70px" title="Срок изготовления, рабочих дней">Дней</th><th style="width:40px"></th></tr>';
+    :'<tr><th style="width:110px">Код</th><th>Наименование</th><th style="width:70px">Ед.</th><th style="width:120px">Цена, ₽</th><th style="width:70px" title="Срок изготовления, рабочих дней">Дней</th><th style="width:100px" title="Себестоимость материалов на единицу — видна только лаборатории">Себест., ₽</th><th style="width:40px"></th></tr>';
   d.innerHTML=PR.clinic?`Скидка на весь прайс <input class="set-input" type="number" min="0" max="100" step="0.5" style="flex:none;width:80px;min-width:0" value="${clinicTerms(PR.clinic)?.discount||0}" onchange="setClinicDiscount(this.value)"> % <span class="set-note" style="margin:0">— пустая ячейка: базовая цена со скидкой</span>`:'';
 }
 function svcEdit(k,f,v){
   const x=SERVICES.find(s=>s.k===k); if(!x)return;
   if(f==='p'){x.p=Math.max(0,+v||0);SETTINGS.prices[k]=x.p;}
   else if(f==='d'){x.d=Math.max(0,parseInt(v)||0);}
+  else if(f==='c'){x.c=Math.max(0,+v||0);}
   else{v=String(v).trim();if(!v&&f==='n'){showToast('Наименование не может быть пустым','','error');renderPriceRows();return;}x[f]=v||'шт';}
-  saveCatalog(); showToast('Прайс обновлён',x.n+(f==='p'?': '+rub(x.p):f==='d'?': '+(x.d?x.d+' раб. дн.':'срок не задан'):''));
+  saveCatalog(); showToast('Прайс обновлён',x.n+(f==='p'?': '+rub(x.p):f==='d'?': '+(x.d?x.d+' раб. дн.':'срок не задан'):f==='c'?': себестоимость '+rub(x.c):''));
 }
 function newCode(){let k;do{k='svc_'+Math.random().toString(36).slice(2,7);}while(SERVICES.some(s=>s.k===k));return k;}
 function svcAdd(){
@@ -1587,7 +1611,7 @@ function parseMoney(v){
   return /^-?\d+(\.\d+)?$/.test(s)?+s:NaN;
 }
 function rowsToItems(rows){
-  const re={n:/наимен|услуг|назван|позиц|работ|name|item|service/i,p:/цен|стоим|руб|price|cost|тариф/i,k:/^код|артик|code|sku|^id$/i,u:/^ед|единиц|unit/i,d:/срок|дн(ей|и)|days|duration/i};
+  const re={n:/наимен|услуг|назван|позиц|работ|name|item|service/i,p:/^(?!.*(себест|затрат|материал)).*(цен|стоим|руб|price|тариф)/i,c:/себест|затрат|материал|^cost$/i,k:/^код|артик|code|sku|^id$/i,u:/^ед|единиц|unit/i,d:/срок|дн(ей|и)|days|duration/i};
   let h=-1,col={};
   for(let i=0;i<Math.min(rows.length,15)&&h<0;i++){
     const r=rows[i].map(c=>String(c??'')), f={};
@@ -1605,7 +1629,7 @@ function rowsToItems(rows){
   rows.slice(h+1).forEach(r=>{
     const n=String(r[col.n]??'').trim(), p=parseMoney(r[col.p]);
     if(!n||isNaN(p)||p<0)return;
-    items.push({k:col.k!==undefined?String(r[col.k]??'').trim():'',n,u:col.u!==undefined?String(r[col.u]??'').trim()||'шт':'шт',p:Math.round(p*100)/100,d:col.d!==undefined?parseInt(r[col.d])||0:undefined});
+    items.push({k:col.k!==undefined?String(r[col.k]??'').trim():'',n,u:col.u!==undefined?String(r[col.u]??'').trim()||'шт':'шт',p:Math.round(p*100)/100,d:col.d!==undefined?parseInt(r[col.d])||0:undefined,c:col.c!==undefined?(isNaN(parseMoney(r[col.c]))?0:parseMoney(r[col.c])):undefined});
   });
   if(!items.length)throw new Error('В файле не найдено ни одной позиции с ценой');
   return items;
@@ -1653,8 +1677,8 @@ function applyImport(){
   I.items.forEach(it=>{
     const m=find(it), k=m?.k||it.k&&!next.some(s=>s.k===it.k)&&it.k||newCode();
     const ex=next.find(s=>s.k===k);
-    const d=it.d!==undefined?it.d:ex?.d;
-    if(ex)Object.assign(ex,{n:it.n,u:it.u,p:it.p,d}); else next.push({k,n:it.n,u:it.u,p:it.p,d});
+    const d=it.d!==undefined?it.d:ex?.d, c=it.c!==undefined?it.c:ex?.c;
+    if(ex)Object.assign(ex,{n:it.n,u:it.u,p:it.p,d,c}); else next.push({k,n:it.n,u:it.u,p:it.p,d,c});
     SETTINGS.prices[k]=it.p;
   });
   SERVICES.splice(0,SERVICES.length,...next);
@@ -1663,11 +1687,11 @@ function applyImport(){
   showToast('Прайс загружен',SERVICES.length+' позиций в прайсе');
 }
 async function exportPrice(fmt){
-  const rows=[['Код','Наименование','Ед.','Цена, ₽','Срок, раб. дн.']].concat(SERVICES.map(x=>[x.k,x.n,x.u||'шт',priceOf(x.k),x.d||'']));
+  const rows=[['Код','Наименование','Ед.','Цена, ₽','Срок, раб. дн.','Себестоимость, ₽']].concat(SERVICES.map(x=>[x.k,x.n,x.u||'шт',priceOf(x.k),x.d||'',x.c||'']));
   const name='ownlab-price-'+new Date().toISOString().slice(0,10);
   if(fmt==='csv'){downloadCSV(rows.map(r=>r.map((v,i)=>i===3?num2(v):v)),name+'.csv');return;}
   try{
-    await loadXLSX(); const ws=XLSX.utils.aoa_to_sheet(rows); ws['!cols']=[{wch:14},{wch:48},{wch:8},{wch:12},{wch:14}];
+    await loadXLSX(); const ws=XLSX.utils.aoa_to_sheet(rows); ws['!cols']=[{wch:14},{wch:48},{wch:8},{wch:12},{wch:14},{wch:16}];
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Прайс'); XLSX.writeFile(wb,name+'.xlsx');
   }catch(e){showToast('Excel недоступен',e.message+' · скачан CSV','warning');exportPrice('csv');}
 }
@@ -1796,6 +1820,7 @@ const REMAKE_REASONS=['Не подошло по посадке','Скол / по
 function orderActs(o){
   const b=[];
   b.push(`<button class="set-btn sec" onclick="printWorkOrder('${o.id}')">🏷 Печать наряда</button>`);
+  if(canCreate())b.push(`<button class="set-btn sec" onclick="repeatOrder('${o.id}')">↻ Повторить</button>`);
   if(canEdit(o))b.push(`<button class="set-btn sec" onclick="openEditOrder('${o.id}')">✏️ Изменить</button>`);
   if(canRemake(o))b.push(`<button class="set-btn sec" onclick="openRemake('${o.id}')">🔁 Переделка</button>`);
   if(canCancel(o))b.push(o.cancelled?`<button class="set-btn sec" onclick="restoreOrder('${o.id}')">↺ Вернуть в работу</button>`:`<button class="set-btn danger" onclick="cancelOrder('${o.id}')">Отменить заказ</button>`);
@@ -1930,8 +1955,151 @@ async function printWorkOrder(id){
     <p class="small">Наклейка на коробку (вырежьте по пунктиру):</p>${label}`);
 }
 
+// ── ФАЙЛЫ: 3D-ПРОСМОТР И ГАЛЕРЕЯ ─────────────────────────────────────────────
+const MODEL_EXT=/\.(stl|ply|obj)$/i, IMG_EXT=/\.(jpe?g|png|webp|gif|heic|bmp)$/i;
+async function fileUrl(f){return f.url||null;}          // cloud.js: подписанная ссылка из хранилища
+function loadScript(src){return new Promise((ok,no)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=()=>no(new Error('Не загрузился '+src.split('/').pop()));document.head.appendChild(s);});}
+let threeReady=null;
+function loadThree(){
+  if(threeReady)return threeReady;
+  const b='https://cdn.jsdelivr.net/npm/three@0.146.0/';
+  threeReady=loadScript(b+'build/three.min.js').then(()=>Promise.all(['examples/js/loaders/STLLoader.js','examples/js/loaders/PLYLoader.js','examples/js/loaders/OBJLoader.js','examples/js/controls/OrbitControls.js'].map(p=>loadScript(b+p))));
+  threeReady.catch(()=>{threeReady=null;});
+  return threeReady;
+}
+function overlay(id,html){
+  let el=document.getElementById(id);
+  if(!el){el=document.createElement('div');el.id=id;el.className='mv-wrap';document.body.appendChild(el);}
+  el.innerHTML=html; el.classList.add('open'); return el;
+}
+const MV={stop:null};
+function closeModel(){MV.stop?.();MV.stop=null;document.getElementById('mv')?.classList.remove('open');}
+async function openModel(f){
+  const el=overlay('mv',`<div class="mv-box"><div class="mv-head"><b>🦷 ${esc(f.n)}</b><span id="mv-info" class="mv-info">Загрузка…</span>
+    <span class="mv-btns"><button class="set-btn sec" onclick="MV.reset&&MV.reset()">Сбросить вид</button><button class="set-btn sec" onclick="MV.wire&&MV.wire()">Сетка</button><button class="set-btn sec" onclick="downloadFile(MV.f)">⬇️ Скачать</button><button class="set-btn sec" onclick="closeModel()">✕</button></span></div>
+    <div class="mv-canvas" id="mv-c"></div><div class="mv-hint">Вращение — левая кнопка или один палец, сдвиг — правая кнопка или два пальца, масштаб — колесо или щипок</div></div>`);
+  MV.f=f;
+  const info=document.getElementById('mv-info');
+  try{
+    const [url]=await Promise.all([fileUrl(f),loadThree()]);
+    if(!url)throw new Error('Содержимого файла нет (демо-файл)');
+    const ext=f.n.split('.').pop().toLowerCase(), res=await fetch(url); if(!res.ok)throw new Error('Файл не скачался ('+res.status+')');
+    let obj;
+    if(ext==='obj'){obj=new THREE.OBJLoader().parse(await res.text());}
+    else{
+      const buf=await res.arrayBuffer(), g=ext==='ply'?new THREE.PLYLoader().parse(buf):new THREE.STLLoader().parse(buf);
+      if(ext==='stl'||!g.attributes.normal)g.computeVertexNormals();   // в STL нормали часто нулевые
+      const vc=!!g.attributes.color;
+      obj=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:vc?0xffffff:0xe9dfcf,vertexColors:vc,roughness:.55,metalness:.05,side:THREE.DoubleSide}));
+    }
+    obj.traverse?.(c=>{if(c.isMesh&&!c.material.isMeshStandardMaterial)c.material=new THREE.MeshStandardMaterial({color:0xe9dfcf,roughness:.55,side:THREE.DoubleSide});});
+    const box=new THREE.Box3().setFromObject(obj), size=box.getSize(new THREE.Vector3()), c=box.getCenter(new THREE.Vector3());
+    obj.position.sub(c);
+    let tris=0; obj.traverse(m=>{if(m.isMesh){const g=m.geometry;tris+=(g.index?g.index.count:g.attributes.position.count)/3;}});
+    info.textContent=`${Math.round(tris).toLocaleString('ru-RU')} треуг. · ${size.x.toFixed(1)} × ${size.y.toFixed(1)} × ${size.z.toFixed(1)} мм`;
+    const host=document.getElementById('mv-c'), W=()=>host.clientWidth, H=()=>host.clientHeight;
+    const scene=new THREE.Scene(); scene.background=new THREE.Color(0xf4f4f4);
+    const cam=new THREE.PerspectiveCamera(40,W()/H(),.1,10000), r=Math.max(size.x,size.y,size.z)||10;
+    const renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(2,devicePixelRatio)); renderer.setSize(W(),H()); host.appendChild(renderer.domElement);
+    scene.add(new THREE.HemisphereLight(0xffffff,0x444444,.45)); const dl=new THREE.DirectionalLight(0xffffff,.75); cam.add(dl); dl.position.set(1,1,2); scene.add(cam); scene.add(obj);
+    const ctl=new THREE.OrbitControls(cam,renderer.domElement); ctl.enableDamping=true;
+    MV.reset=()=>{cam.position.set(r*1.1,-r*1.3,r*1.6);cam.up.set(0,1,0);ctl.target.set(0,0,0);ctl.update();};MV.reset();
+    MV.wire=()=>obj.traverse(m=>{if(m.isMesh)m.material.wireframe=!m.material.wireframe;});
+    let alive=true; const loop=()=>{if(!alive)return;ctl.update();renderer.render(scene,cam);requestAnimationFrame(loop);}; loop();
+    const onR=()=>{cam.aspect=W()/H();cam.updateProjectionMatrix();renderer.setSize(W(),H());}; addEventListener('resize',onR);
+    MV.stop=()=>{alive=false;removeEventListener('resize',onR);ctl.dispose();renderer.dispose();obj.traverse(m=>{m.geometry?.dispose();m.material?.dispose?.();});};
+  }catch(e){console.error(e);info.textContent='';document.getElementById('mv-c').innerHTML=`<div class="pop-empty">Не удалось показать модель: ${esc(e.message||e)}</div>`;}
+}
+const LB={list:[],i:0};
+async function openGallery(oid,i){
+  const o=ORDERS.find(x=>x.id===oid); if(!o)return;
+  LB.list=(o.files||[]).filter(f=>IMG_EXT.test(f.n)); LB.i=Math.max(0,LB.list.indexOf(o.files[i]));
+  overlay('lb',`<div class="lb-box"><div class="mv-head"><b id="lb-t"></b><span class="mv-info" id="lb-n"></span><span class="mv-btns"><button class="set-btn sec" onclick="downloadFile(LB.list[LB.i])">⬇️ Скачать</button><button class="set-btn sec" onclick="closeGallery()">✕</button></span></div>
+    <div class="lb-stage"><button class="lb-nav" onclick="lbGo(-1)">‹</button><img id="lb-img" alt=""><button class="lb-nav" onclick="lbGo(1)">›</button></div>
+    <div class="lb-strip" id="lb-strip"></div></div>`);
+  document.getElementById('lb-strip').innerHTML=LB.list.map((f,k)=>`<img data-k="${k}" onclick="LB.i=${k};lbShow()" alt="">`).join('');
+  LB.list.forEach(async(f,k)=>{const u=await fileUrl(f);const im=document.querySelector(`#lb-strip img[data-k="${k}"]`);if(u&&im)im.src=u;});
+  lbShow();
+}
+async function lbShow(){
+  const f=LB.list[LB.i]; if(!f)return;
+  document.getElementById('lb-t').textContent=f.n; document.getElementById('lb-n').textContent=(LB.i+1)+' из '+LB.list.length;
+  const im=document.getElementById('lb-img'); im.removeAttribute('src'); const u=await fileUrl(f); if(u)im.src=u; else im.alt='Демо-файл — содержимого нет';
+  document.querySelectorAll('#lb-strip img').forEach(x=>x.classList.toggle('on',+x.dataset.k===LB.i));
+}
+function lbGo(d){if(!LB.list.length)return;LB.i=(LB.i+d+LB.list.length)%LB.list.length;lbShow();}
+function closeGallery(){document.getElementById('lb')?.classList.remove('open');}
+document.addEventListener('keydown',e=>{
+  if(document.getElementById('lb')?.classList.contains('open')){if(e.key==='ArrowLeft')lbGo(-1);if(e.key==='ArrowRight')lbGo(1);if(e.key==='Escape')closeGallery();}
+  if(e.key==='Escape')closeModel();
+});
+async function downloadFile(f){
+  if(!f)return; const u=await fileUrl(f,true); if(!u){showToast(f.n,'Демо-файл — содержимого нет','warning');return;}
+  const a=document.createElement('a'); a.href=u; a.download=f.n; a.rel='noopener'; a.click();
+}
+
+// ── ПОВТОР ЗАКАЗА И ШАБЛОНЫ ──────────────────────────────────────────────────
+function canCreate(){return true;}                  // cloud.js: техник заказы не создаёт
+const TPL_KEY='ownlab_templates_v1';
+const TPL_FIELDS=['clinic','doctor','type','units','shade','material','teeth','tech','priority','notes'];
+async function tplList(){try{return JSON.parse(localStorage.getItem(TPL_KEY))||[];}catch(e){return[];}}
+async function tplSave(name,data){const l=await tplList();l.push({id:'t'+Date.now(),name,data});try{localStorage.setItem(TPL_KEY,JSON.stringify(l));}catch(e){}}
+async function tplDelete(id){const l=(await tplList()).filter(t=>t.id!==id);try{localStorage.setItem(TPL_KEY,JSON.stringify(l));}catch(e){}}
+function formGet(){const d={};TPL_FIELDS.forEach(k=>{const el=document.getElementById('f-'+k);if(el&&el.closest('.form-group')?.style.display!=='none')d[k]=el.value;});return d;}
+function formSet(d){
+  TPL_FIELDS.forEach(k=>{const el=document.getElementById('f-'+k);if(el&&d[k]!==undefined&&!el.readOnly&&el.closest('.form-group')?.style.display!=='none')el.value=d[k];});
+  document.getElementById('f-deadline').value=''; fillPrice();
+}
+async function renderTplBar(){
+  let bar=document.getElementById('f-tplbar');
+  if(!bar){bar=document.createElement('div');bar.id='f-tplbar';bar.className='tpl-bar';document.querySelector('#modalOverlay .form-sec-title').before(bar);}
+  const l=await tplList();
+  bar.innerHTML=`<select class="form-select" id="f-tpl" onchange="useTpl(this.value)"><option value="">📋 Заполнить из шаблона…</option>${l.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}</select>
+    <button class="set-btn sec" type="button" onclick="saveTpl()">💾 Сохранить как шаблон</button>${l.length?`<button class="set-btn sec" type="button" title="Удалить выбранный шаблон" onclick="delTpl()">🗑</button>`:''}`;
+}
+async function useTpl(id){if(!id)return;const t=(await tplList()).find(x=>x.id===id);if(t){formSet(t.data);showToast('Шаблон применён',t.name);}}
+async function saveTpl(){
+  const d=formGet(); if(!d.type){showToast('Выберите хотя бы услугу','','error');return;}
+  const name=prompt('Название шаблона:',svcName(d.type)+(d.clinic?' · '+d.clinic:'')); if(!name)return;
+  await tplSave(name.trim().slice(0,100),d); await renderTplBar(); showToast('Шаблон сохранён',name);
+}
+async function delTpl(){const id=document.getElementById('f-tpl').value;if(!id){showToast('Выберите шаблон в списке','','warning');return;}if(!confirm('Удалить шаблон?'))return;await tplDelete(id);await renderTplBar();showToast('Шаблон удалён','','warning');}
+function repeatOrder(id){
+  const o=ORDERS.find(x=>x.id===id); if(!o)return;
+  openModal();
+  setTimeout(()=>{formSet({clinic:o.clinic,doctor:o.doctor==='—'?'':o.doctor,type:o.svc,units:o.units,shade:o.shade==='—'?'':o.shade,material:o.material==='—'?'':o.material,teeth:o.teeth==='—'?'':o.teeth,tech:o.tech==='—'?'':o.tech,priority:'normal'});
+    document.getElementById('f-patient').value=o.patient; showToast('Данные заказа подставлены',o.num+' · проверьте и сохраните');},50);
+}
+
+// ── СЕБЕСТОИМОСТЬ И РЕНТАБЕЛЬНОСТЬ ───────────────────────────────────────────
+function canSeeProfit(){return true;}
+function costOf(k){return +SERVICES.find(s=>s.k===k)?.c||0;}
+function orderPct(o){
+  if(!o.tech||o.tech==='—')return 0;
+  return o.techPercent??techRate(window.CLOUD?o.tech_id:o.tech)??SETTINGS.techPercent??0;
+}
+function econ(o){const rev=amt(o),mat=(+o.units||0)*costOf(o.svc),pay=Math.round(rev*orderPct(o))/100;return{rev,mat,pay,mar:rev-mat-pay};}
+function profitCard(list){
+  if(!canSeeProfit())return'';
+  const g=f=>{const m={};list.forEach(o=>{const k=f(o)||'—',e=econ(o),x=m[k]=m[k]||{rev:0,mat:0,pay:0,mar:0,n:0};x.n++;for(const z in e)x[z]+=e[z];});return Object.entries(m).sort((a,b)=>b[1].mar-a[1].mar);};
+  const T=list.map(econ).reduce((a,e)=>{for(const z in e)a[z]+=e[z];return a;},{rev:0,mat:0,pay:0,mar:0});
+  const pct=x=>x.rev?(x.mar/x.rev*100).toFixed(1)+'%':'—';
+  const tbl=(title,rows)=>`<div style="overflow-x:auto"><table class="rep"><thead><tr><th>${title}</th><th class="n">Заказов</th><th class="n">Выручка</th><th class="n">Материалы</th><th class="n">Техникам</th><th class="n">Маржа</th><th class="n">%</th></tr></thead>
+    <tbody>${rows.map(([k,x])=>`<tr><td>${esc(k)}</td><td class="n">${x.n}</td><td class="n">${rub(x.rev)}</td><td class="n">${rub(x.mat)}</td><td class="n">${rub(x.pay)}</td><td class="n" style="color:${x.mar<0?'var(--red)':'inherit'}"><b>${rub(x.mar)}</b></td><td class="n">${pct(x)}</td></tr>`).join('')}</tbody></table></div>`;
+  const noCost=!SERVICES.some(s=>+s.c);
+  return `<div class="p-card"><div class="p-card-ttl">💹 Рентабельность за период</div>
+    <div class="kpi-row" style="margin-bottom:10px">
+      <div class="kpi"><div class="kn" style="color:var(--org)">${rub(T.rev)}</div><div class="kl">Выручка</div></div>
+      <div class="kpi"><div class="kn">${rub(T.mat)}</div><div class="kl">Материалы (себестоимость)</div></div>
+      <div class="kpi"><div class="kn">${rub(T.pay)}</div><div class="kl">Оплата техников</div></div>
+      <div class="kpi"><div class="kn" style="color:${T.mar<0?'var(--red)':'var(--green)'}">${rub(T.mar)}</div><div class="kl">Маржа · ${pct(T)}</div></div></div>
+    ${noCost?'<div class="doc-warn">Себестоимость материалов не задана — укажите её в «Настройках → Прайс-лист», столбец «Себест.».</div>':''}
+    <div class="p-grid">${tbl('Услуга',g(o=>svcName(o.svc)))}${tbl('Клиника',g(o=>o.clinic))}</div>
+    <div class="set-note">Маржа = выручка − материалы (единиц × себестоимость) − оплата техника по его ставке. Аренда, оборудование и прочие расходы не учитываются.</div></div>`;
+}
+
 // ── МОДАЛКА ───────────────────────────────────────────────────────────────────
-function openModal(){fillTypeSelect();document.getElementById('modalOverlay').classList.add('open');}
+function openModal(){fillTypeSelect();renderTplBar();document.getElementById('modalOverlay').classList.add('open');}
 function fillTypeSelect(){
   const el=document.getElementById('f-type'), cur=el.value;
   el.innerHTML='<option value="">— Выберите услугу —</option>'+SERVICES.map(x=>`<option value="${esc(x.k)}">${esc(x.n)}</option>`).join('');
@@ -1983,7 +2151,7 @@ renderOrders();
 if(!window.OWNLAB_CONFIG?.url&&new URLSearchParams(location.search).get('order'))setTimeout(()=>openDetail(new URLSearchParams(location.search).get('order')));
 else if(innerWidth>820){openDetail('o1');switchTab('timeline', document.querySelectorAll('.det-tab')[1]);}
 </script>
-<script src="config.js?v=8"></script>
-<script src="cloud.js?v=8"></script>
+<script src="config.js?v=9"></script>
+<script src="cloud.js?v=9"></script>
 </body>
 </html>
