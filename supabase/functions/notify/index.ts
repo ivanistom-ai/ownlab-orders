@@ -10,7 +10,11 @@ import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') ?? '';
 const URL_BASE = Deno.env.get('SUPABASE_URL')!;
-const sb = createClient(URL_BASE, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+// Ключ сервиса: старый формат (SUPABASE_SERVICE_ROLE_KEY) или новый (SUPABASE_SECRET_KEYS)
+const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || (() => {
+  try { const j = JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') ?? '{}'); return j.default ?? Object.values(j)[0] ?? ''; } catch { return ''; }
+})();
+const sb = createClient(URL_BASE, SERVICE_KEY as string, { auth: { persistSession: false } });
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 const tg = (method: string, p: unknown) =>
