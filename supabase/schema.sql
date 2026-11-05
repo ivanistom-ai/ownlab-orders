@@ -45,6 +45,8 @@ create table if not exists public.orders (
 );
 alter table public.orders add column if not exists done_at timestamptz;       -- когда работа выполнена (этап 13+)
 alter table public.orders add column if not exists tech_percent numeric;      -- ставка техника на момент выполнения
+alter table public.orders add column if not exists cancelled_at timestamptz;  -- заказ отменён
+alter table public.orders add column if not exists cancel_reason text not null default '';
 create index if not exists orders_done_idx on public.orders(done_at);
 create index if not exists orders_clinic_idx on public.orders(clinic_id);
 create index if not exists orders_tech_idx on public.orders(tech_id);
@@ -95,6 +97,14 @@ create table if not exists public.invites (
 create table if not exists public.tech_rates (
   tech_id uuid primary key references public.profiles(id) on delete cascade,
   percent numeric not null check (percent between 0 and 100),
+  updated_at timestamptz not null default now()
+);
+
+-- Договорные цены и скидка клиники (видит и меняет только лаборатория)
+create table if not exists public.clinic_pricing (
+  clinic_id uuid primary key references public.clinics(id) on delete cascade,
+  discount numeric not null default 0 check (discount between 0 and 100),
+  prices jsonb not null default '{}'::jsonb,      -- {"код услуги": цена}
   updated_at timestamptz not null default now()
 );
 
@@ -161,6 +171,19 @@ begin
       new.tech_id := old.tech_id;
       new.doctor_id := old.doctor_id;
     end if;
+    -- Техник и клиника не меняют поля заказа после того, как лаборатория его приняла
+    if not public.is_staff() and (public.my_role() = 'tech' or old.stage > 2) then
+      if new.data is distinct from old.data then
+        raise exception 'Изменить заказ после принятия лабораторией может только лаборатория — напишите в чат заказа';
+      end if;
+      if new.cancelled_at is distinct from old.cancelled_at then
+        raise exception 'Отменить заказ после принятия может только лаборатория';
+      end if;
+    end if;
+    if old.cancelled_at is not null and new.cancelled_at is not null and new.stage <> old.stage then
+      raise exception 'Заказ отменён — сначала верните его в работу';
+    end if;
+    if new.cancelled_at is null then new.cancel_reason := ''; end if;
     new.num := old.num;
     new.created_by := old.created_by;
     new.created_at := old.created_at;
@@ -170,6 +193,7 @@ begin
       new.tech_id := null;                       -- техника назначает лаборатория
       new.clinic_id := public.my_clinic();       -- клиника всегда своя
       if public.my_role() = 'doctor' then new.doctor_id := auth.uid(); end if;
+      new.cancelled_at := null; new.cancel_reason := '';
     end if;
     new.created_by := auth.uid();
   end if;
@@ -213,9 +237,14 @@ create trigger comments_author before insert on public.order_comments
 -- Цена из прайса подставляется сервером при создании заказа
 create or replace function public.orders_default_price() returns trigger
 language plpgsql security definer set search_path = public as $$
-declare p numeric;
+declare p numeric; cp public.clinic_pricing;
 begin
   select coalesce((value->'prices'->>(new.data->>'svc'))::numeric, 0) into p from public.settings where key = 'lab';
+  select * into cp from public.clinic_pricing where clinic_id = new.clinic_id;
+  if cp.clinic_id is not null then
+    p := coalesce(nullif(cp.prices->>(new.data->>'svc'), '')::numeric, round(coalesce(p, 0) * (1 - cp.discount / 100), 2));
+  end if;
+  if new.data ? 'remakeOf' and coalesce(new.data->>'remakeBy', 'lab') = 'lab' then p := 0; end if;
   insert into public.order_prices(order_id, price) values (new.id, coalesce(p, 0)) on conflict do nothing;
   return new;
 end $$;
@@ -233,6 +262,9 @@ alter table public.order_files enable row level security;
 alter table public.invites enable row level security;
 alter table public.settings enable row level security;
 alter table public.tech_rates enable row level security;
+alter table public.clinic_pricing enable row level security;
+drop policy if exists clinic_pricing_all on public.clinic_pricing;
+create policy clinic_pricing_all on public.clinic_pricing for all to authenticated using (public.is_staff()) with check (public.is_staff());
 
 -- clinics
 drop policy if exists clinics_select on public.clinics;
@@ -460,7 +492,7 @@ language sql stable security definer set search_path = public as $$
   from public.orders o
   left join public.order_prices pr on pr.order_id = o.id
   left join public.profiles p on p.id = o.tech_id
-  where o.done_at is not null and o.tech_id is not null
+  where o.done_at is not null and o.tech_id is not null and o.cancelled_at is null
     and (p_from is null or o.done_at >= p_from) and (p_to is null or o.done_at < p_to)
     and (public.is_staff() or (public.my_role() = 'tech' and o.tech_id = auth.uid()))
   order by o.done_at desc
@@ -490,7 +522,7 @@ grant execute on function public.invite_info(uuid), public.has_owner() to anon, 
 -- Доступ к таблицам через API (строки всё равно фильтруются RLS)
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on public.clinics, public.profiles, public.orders, public.order_prices,
-  public.order_comments, public.order_files, public.invites, public.settings, public.tech_rates to authenticated;
+  public.order_comments, public.order_files, public.invites, public.settings, public.tech_rates, public.clinic_pricing to authenticated;
 grant usage, select on sequence public.order_num_seq to authenticated;
 
 -- ── ХРАНИЛИЩЕ ФАЙЛОВ ─────────────────────────────────────────────────────────
@@ -520,13 +552,15 @@ end $$;
 create table if not exists public.order_events (
   id bigserial primary key,
   order_id uuid not null references public.orders(id) on delete cascade,
-  kind text not null check (kind in ('created','stage','tech')),
+  kind text not null,
   from_stage int, to_stage int, info text not null default '',
   actor_id uuid references public.profiles(id) on delete set null,
   actor_name text not null default '', actor_role text not null default '',
   created_at timestamptz not null default now()
 );
 create index if not exists order_events_order_idx on public.order_events(order_id, created_at);
+alter table public.order_events drop constraint if exists order_events_kind_check;
+alter table public.order_events add constraint order_events_kind_check check (kind in ('created','stage','tech','edit','cancel','restore','remake'));
 alter table public.order_events enable row level security;
 drop policy if exists events_select on public.order_events;
 create policy events_select on public.order_events for select to authenticated using (public.can_see_order(order_id));
@@ -535,12 +569,19 @@ grant select on public.order_events to authenticated;
 -- Каждое создание, смена этапа и назначение техника записывается автоматически
 create or replace function public.orders_log() returns trigger
 language plpgsql security definer set search_path = public as $$
-declare a public.profiles; t text;
+declare a public.profiles; t text; orig uuid;
 begin
   select * into a from public.profiles where id = auth.uid();
   if tg_op = 'INSERT' then
     insert into public.order_events(order_id, kind, to_stage, actor_id, actor_name, actor_role, created_at)
     values (new.id, 'created', new.stage, a.id, coalesce(a.full_name, ''), coalesce(a.role, ''), new.created_at);
+    if new.data ? 'remakeOf' then
+      begin orig := (new.data->>'remakeOf')::uuid; exception when others then orig := null; end;
+      if orig is not null and exists (select 1 from public.orders where id = orig) then
+        insert into public.order_events(order_id, kind, info, actor_id, actor_name, actor_role)
+        values (orig, 'remake', new.num || coalesce(' · ' || nullif(new.data->>'remakeReason', ''), ''), a.id, coalesce(a.full_name, ''), coalesce(a.role, ''));
+      end if;
+    end if;
     if new.tech_id is not null then
       select full_name into t from public.profiles where id = new.tech_id;
       insert into public.order_events(order_id, kind, info, actor_id, actor_name, actor_role)
@@ -555,6 +596,20 @@ begin
       select full_name into t from public.profiles where id = new.tech_id;
       insert into public.order_events(order_id, kind, info, actor_id, actor_name, actor_role)
       values (new.id, 'tech', coalesce(t, 'снят'), a.id, coalesce(a.full_name, ''), coalesce(a.role, ''));
+    end if;
+    if new.data is distinct from old.data then
+      select string_agg(key, ',' order by key) into t from (
+        select coalesce(n.key, o.key) key from jsonb_each(new.data) n full join jsonb_each(old.data) o on o.key = n.key
+        where n.value is distinct from o.value) x where key not in ('tech', 'doctor', 'clinic');
+      if t is not null then
+        insert into public.order_events(order_id, kind, info, actor_id, actor_name, actor_role)
+        values (new.id, 'edit', t, a.id, coalesce(a.full_name, ''), coalesce(a.role, ''));
+      end if;
+    end if;
+    if new.cancelled_at is distinct from old.cancelled_at then
+      insert into public.order_events(order_id, kind, info, actor_id, actor_name, actor_role)
+      values (new.id, case when new.cancelled_at is null then 'restore' else 'cancel' end, coalesce(new.cancel_reason, ''),
+              a.id, coalesce(a.full_name, ''), coalesce(a.role, ''));
     end if;
   end if;
   return null;
@@ -636,6 +691,11 @@ begin
   if new.kind = 'created' then
     perform public.enqueue(public.staff_ids(), '🆕 Новый заказ ' || head || E'\nСрок: ' || coalesce(o.data->>'dl', '—')
       || case when new.actor_name <> '' then E'\nСоздал: ' || new.actor_name else '' end, new.actor_id);
+  elsif new.kind = 'cancel' then
+    perform public.enqueue(array_remove(array[o.tech_id], null) || public.clinic_side_ids(o) || public.staff_ids(),
+      '❌ Заказ отменён: ' || head || coalesce(E'\nПричина: ' || nullif(new.info, ''), ''), new.actor_id);
+  elsif new.kind = 'edit' and o.tech_id is not null then
+    perform public.enqueue(array[o.tech_id], '✏️ Изменён заказ ' || head, new.actor_id);
   elsif new.kind = 'tech' and o.tech_id is not null then
     perform public.enqueue(array[o.tech_id], '🔧 Вам назначен заказ ' || head || E'\nСрок: ' || coalesce(o.data->>'dl', '—'), new.actor_id);
   elsif new.kind = 'stage' then
@@ -722,6 +782,7 @@ create table if not exists public.payments (
   created_at timestamptz not null default now()
 );
 create index if not exists payments_clinic_idx on public.payments(clinic_id, paid_at);
+alter table public.payments alter column paid_at set default ((now() at time zone 'Europe/Moscow')::date);
 alter table public.documents enable row level security;
 alter table public.payments enable row level security;
 drop policy if exists documents_select on public.documents;
@@ -747,7 +808,7 @@ language sql stable security definer set search_path = public as $$
          o.num || ' · ' || coalesce(o.data->>'patient', '') || ' · ' || coalesce(o.data->>'type', ''),
          coalesce(pr.price, 0) * coalesce(nullif(o.data->>'units', '')::numeric, 1), 0::numeric
   from public.orders o left join public.order_prices pr on pr.order_id = o.id
-  where o.done_at is not null and (p_clinic is null or o.clinic_id = p_clinic)
+  where o.done_at is not null and o.cancelled_at is null and (p_clinic is null or o.clinic_id = p_clinic)
     and (public.is_staff() or (public.my_role() = 'clinic_admin' and o.clinic_id = public.my_clinic()))
   union all
   select p.clinic_id, p.paid_at, 'payment',
