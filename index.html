@@ -245,6 +245,85 @@ button,input,select,textarea{font-family:var(--font)}
 .empty-state{text-align:center;padding:60px 0;color:var(--t4)}
 .empty-icon{font-size:36px;margin-bottom:12px}
 .empty-text{font-weight:600;color:var(--t3);margin-bottom:4px}
+.empty-reset{margin-top:14px;background:var(--card);border:1px solid var(--org-g);color:var(--org);font-size:11px;font-weight:600;padding:7px 14px;border-radius:6px;cursor:pointer}
+.empty-reset:hover{background:var(--org-d)}
+
+/* ВСПЛЫВАЮЩИЕ МЕНЮ */
+.pop-wrap{position:relative}
+.pop{display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:300;min-width:190px;max-height:380px;overflow-y:auto;padding:5px;background:rgba(250,250,250,.97);backdrop-filter:blur(12px);border:1px solid var(--border2);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.14)}
+.pop.open{display:block}
+.pop-head{padding:8px 12px 6px;font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--t4)}
+.pop-item{position:relative;display:flex;gap:8px;align-items:flex-start;padding:7px 12px 7px 30px;border-radius:6px;font-size:12px;color:var(--t1);cursor:pointer;line-height:1.35}
+.pop-item:hover{background:#EC955C;color:#fff}
+.pop-item:hover .pop-sub{color:rgba(255,255,255,.85)}
+.pop-item.sel::before{content:'✓';position:absolute;left:11px;font-weight:700}
+.pop-item.ico{padding-left:12px}
+.pop-sub{display:block;font-size:10px;color:var(--t4);margin-top:1px}
+.pop-empty{padding:14px 12px;font-size:11px;color:var(--t4);text-align:center}
+.pop-bell{width:330px}
+.notif-dot.hidden{display:none}
+
+/* ПОИСК, ФИЛЬТРЫ */
+.search-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--t4);font-size:13px;cursor:pointer;padding:4px;display:none}
+.search-clear.show{display:block}
+.search-clear:hover{color:var(--t1)}
+.stat-chip{cursor:pointer;transition:all .15s}
+.stat-chip:hover{border-color:var(--border2);box-shadow:0 3px 10px rgba(0,0,0,.08)}
+.stat-chip.on{border-color:var(--org);background:var(--org-d)}
+.f-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.f-chips:empty{display:none}
+.f-chip{display:inline-flex;align-items:center;gap:6px;background:var(--org-d);border:1px solid var(--org-g);color:var(--org);font-size:10px;font-weight:600;padding:3px 4px 3px 9px;border-radius:20px}
+.f-chip button{background:none;border:none;color:var(--org);cursor:pointer;font-size:11px;padding:0 4px}
+.c-dl.over{color:var(--red);font-weight:700}
+
+/* СТРАНИЦЫ: АНАЛИТИКА / СРОКИ / НАСТРОЙКИ */
+.page{padding:20px 24px 32px;display:none}
+.page.open{display:block}
+.page-ttl{font-size:18px;font-weight:700;margin-bottom:4px}
+.page-sub{font-size:11px;color:var(--t4);margin-bottom:18px}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.kpi .kn{font-size:22px;font-weight:700;font-family:var(--mono);line-height:1.1}
+.kpi .kl{font-size:10px;color:var(--t3);margin-top:4px}
+.p-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+.p-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.05);margin-bottom:12px}
+.p-card-ttl{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--t4);margin-bottom:10px}
+.bar-row{display:grid;grid-template-columns:minmax(90px,150px) minmax(40px,1fr) max-content;gap:10px;align-items:center;padding:5px 6px;border-radius:6px;font-size:11px;cursor:pointer}
+.bar-row:hover{background:var(--card2)}
+.bar-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--t2)}
+.bar-track{height:8px;background:var(--card3);border-radius:4px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--org),#FF9500)}
+.bar-val{white-space:nowrap;text-align:right;font-family:var(--mono);color:var(--t3);font-size:10px}
+.dl-group{margin-bottom:16px}
+.dl-gttl{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:7px;display:flex;gap:8px;align-items:center}
+.dl-gttl span{font-family:var(--mono);color:var(--t4)}
+.dl-row{display:grid;grid-template-columns:max-content max-content minmax(0,1fr) minmax(0,130px) 60px;gap:12px;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;margin-bottom:6px;cursor:pointer;font-size:12px;transition:all .15s}
+.dl-row:hover{border-color:var(--border2);transform:translateX(2px)}
+.dl-date{font-family:var(--mono);font-size:11px;color:var(--t2)}
+.dl-left{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;text-align:center;white-space:nowrap}
+.dl-left.over{background:rgba(220,38,38,.1);color:var(--red)}
+.dl-left.today{background:var(--org-d);color:var(--org)}
+.dl-left.soon{background:rgba(202,138,4,.1);color:var(--yellow)}
+.dl-left.ok{background:rgba(22,163,74,.1);color:var(--green)}
+.dl-main{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dl-main b{font-weight:600}
+.dl-main small{color:var(--t4);margin-left:6px}
+.dl-tech{font-size:11px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.set-row{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.set-row label{font-size:11px;color:var(--t3);width:120px}
+.set-input{flex:1;min-width:160px;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;outline:none}
+.set-input:focus{border-color:var(--org)}
+.set-btn{background:var(--org);color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer}
+.set-btn:hover{background:#D45A10}
+.set-btn.sec{background:var(--card);color:var(--t2);border:1px solid var(--border)}
+.set-btn.sec:hover{background:var(--card2)}
+.set-btn.danger{background:var(--card);color:var(--red);border:1px solid rgba(220,38,38,.3)}
+.tech-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.tech-tag{display:inline-flex;align-items:center;gap:6px;background:var(--card2);border:1px solid var(--border);border-radius:20px;padding:4px 6px 4px 11px;font-size:11px}
+.tech-tag button{background:none;border:none;color:var(--t4);cursor:pointer;font-size:11px}
+.tech-tag button:hover{color:var(--red)}
+@media (max-width:1100px){.dl-row{grid-template-columns:max-content max-content minmax(0,1fr)}.dl-row .dl-tech,.dl-row .bar-track{display:none}}
+.set-note{font-size:10px;color:var(--t4);margin-top:6px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -257,10 +336,16 @@ button,input,select,textarea{font-family:var(--font)}
   </div>
   <div class="env-badge">Система заказов v1.0</div>
   <div style="display:flex;align-items:center;gap:16px">
-    <button class="hdr-bell" onclick="showToast('3 новых события','Требует вашего внимания','warning')">
-      🔔<div class="notif-dot"></div>
-    </button>
-    <div class="avatar">ИЖ</div>
+    <div class="pop-wrap">
+      <button class="hdr-bell" onclick="toggleBell(event)" title="Уведомления">
+        🔔<div class="notif-dot" id="notif-dot"></div>
+      </button>
+      <div class="pop pop-bell" id="pop-bell"></div>
+    </div>
+    <div class="pop-wrap">
+      <div class="avatar" id="avatar" onclick="togglePop('pop-user',event)" title="Профиль">ИЖ</div>
+      <div class="pop" id="pop-user"></div>
+    </div>
   </div>
 </header>
 
@@ -272,31 +357,22 @@ button,input,select,textarea{font-family:var(--font)}
     <div class="sb-block">
       <button class="btn-new" onclick="openModal()"><span style="font-size:16px">＋</span> Новый заказ</button>
       <span class="s-lbl">По статусу</span>
-      <div class="nav-item active" onclick="filterStatus('all',this)">📋 Все заказы <span class="nav-cnt" id="cnt-all">6</span></div>
-      <div class="nav-item" onclick="filterStatus('green',this)">🟢 Приём / проверка <span class="nav-cnt">2</span></div>
-      <div class="nav-item" onclick="filterStatus('yellow',this)">🟡 Анализ / план <span class="nav-cnt">1</span></div>
-      <div class="nav-item" onclick="filterStatus('blue',this)">🔵 Производство <span class="nav-cnt">1</span></div>
-      <div class="nav-item" onclick="filterStatus('orange',this)">🟠 Финишинг / QC <span class="nav-cnt">1</span></div>
-      <div class="nav-item" onclick="filterStatus('delivery',this)">🚚 Доставка <span class="nav-cnt">1</span></div>
-      <div class="nav-item" onclick="filterStatus('done',this)">✅ Завершённые <span class="nav-cnt">0</span></div>
+      <div id="status-nav"></div>
       <div class="s-div"></div>
       <span class="s-lbl">По технику</span>
-      <div class="nav-item" onclick="filterTech('all',this)">👥 Все техники</div>
-      <div class="nav-item" onclick="filterTech('Артём',this)">🔷 Артём К.</div>
-      <div class="nav-item" onclick="filterTech('Мария',this)">🔶 Мария В.</div>
-      <div class="nav-item" onclick="filterTech('Дмитрий',this)">🔹 Дмитрий Н.</div>
+      <div id="tech-nav"></div>
       <div class="s-div"></div>
       <span class="s-lbl">Разделы</span>
-      <div class="nav-item" onclick="showToast('Аналитика','Доступно в полной версии')">📊 Аналитика</div>
-      <div class="nav-item" onclick="showToast('Сроки','Доступно в полной версии')">⏱ Сроки</div>
-      <div class="nav-item" onclick="showToast('Настройки','Доступно в полной версии')">⚙️ Настройки</div>
+      <div class="nav-item" data-view="analytics" onclick="showView('analytics')">📊 Аналитика</div>
+      <div class="nav-item" data-view="deadlines" onclick="showView('deadlines')">⏱ Сроки <span class="nav-cnt" id="cnt-over"></span></div>
+      <div class="nav-item" data-view="settings" onclick="showView('settings')">⚙️ Настройки</div>
     </div>
     <div class="sb-stats">
       <div class="s-div" style="margin:0 0 10px"></div>
       <span class="s-lbl">Сегодня</span>
-      <div class="sb-stat"><span class="sk">Выполнено этапов</span><span class="sv" style="color:var(--org)">7</span></div>
-      <div class="sb-stat"><span class="sk">Закрыто заказов</span><span class="sv" style="color:var(--green)">2</span></div>
-      <div class="sb-stat"><span class="sk">Просрочено</span><span class="sv" style="color:var(--red)">0</span></div>
+      <div class="sb-stat"><span class="sk">Этапов пройдено</span><span class="sv" style="color:var(--org)" id="st-stages">0</span></div>
+      <div class="sb-stat"><span class="sk">Сдать сегодня</span><span class="sv" style="color:var(--green)" id="st-today">0</span></div>
+      <div class="sb-stat"><span class="sk">Просрочено</span><span class="sv" style="color:var(--red)" id="st-over">0</span></div>
     </div>
   </aside>
 
@@ -305,24 +381,34 @@ button,input,select,textarea{font-family:var(--font)}
 
     <!-- MAIN -->
     <main class="main" id="mainArea">
+      <div id="view-orders">
       <div class="topbar">
         <div class="search-wrap">
           <span class="search-ico">🔍</span>
-          <input type="text" placeholder="Поиск по пациенту, клинике, ID..." oninput="searchOrders(this.value)">
+          <input type="text" id="searchInput" autocomplete="off" placeholder="Поиск: пациент, клиника, врач, техник, ID..." oninput="searchOrders(this.value)">
+          <button class="search-clear" id="searchClear" onclick="clearSearch()" title="Очистить">✕</button>
         </div>
         <div class="stat-chips">
-          <div class="stat-chip"><span class="sn" style="color:var(--org)" id="stat-active">6</span><span class="sl">Активных</span></div>
-          <div class="stat-chip"><span class="sn" style="color:var(--red)">2</span><span class="sl">⚡ Срочных</span></div>
-          <div class="stat-chip"><span class="sn" style="color:var(--green)">14</span><span class="sl">Закрыто / мес</span></div>
+          <div class="stat-chip" id="chip-active" onclick="chipFilter('active')" title="Показать заказы в работе"><span class="sn" style="color:var(--org)" id="stat-active">0</span><span class="sl">Активных</span></div>
+          <div class="stat-chip" id="chip-urgent" onclick="chipFilter('urgent')" title="Показать только срочные"><span class="sn" style="color:var(--red)" id="stat-urgent">0</span><span class="sl">⚡ Срочных</span></div>
+          <div class="stat-chip" id="chip-done" onclick="chipFilter('done')" title="Показать завершённые"><span class="sn" style="color:var(--green)" id="stat-done">0</span><span class="sl">Завершено</span></div>
         </div>
       </div>
       <div class="orders-sec">
         <div class="sec-hdr">
-          <span class="sec-ttl">Активные заказы</span>
-          <button class="btn-sort">По сроку ▾</button>
+          <span class="sec-ttl" id="secTitle">Все заказы</span>
+          <div class="pop-wrap">
+            <button class="btn-sort" id="sortBtn" onclick="togglePop('pop-sort',event)">По сроку ▾</button>
+            <div class="pop" id="pop-sort"></div>
+          </div>
         </div>
+        <div class="f-chips" id="fChips"></div>
         <div class="orders-list" id="ordersList"></div>
       </div>
+      </div>
+      <div class="page" id="view-analytics"></div>
+      <div class="page" id="view-deadlines"></div>
+      <div class="page" id="view-settings"></div>
     </main>
 
     <!-- DETAIL PANEL -->
@@ -483,47 +569,84 @@ const STAGES=[
 ];
 
 const SBADGE={green:'sb-green',yellow:'sb-yellow',blue:'sb-blue',orange:'sb-orange',delivery:'sb-delivery',done:'sb-done'};
+const GROUPS=[['green','🟢','Приём / проверка'],['yellow','🟡','Анализ / план'],['blue','🔵','Производство'],['orange','🟠','Финишинг / QC'],['delivery','🚚','Доставка'],['done','✅','Завершённые']];
+
+// ── ДАТЫ ──────────────────────────────────────────────────────────────────────
+function dIn(n){const d=new Date();d.setDate(d.getDate()+n);return d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'});}
+function parseDl(s){const m=/^(\d{2})\.(\d{2})\.(\d{4})$/.exec(s||'');return m?new Date(+m[3],m[2]-1,+m[1]):null;}
+function daysLeft(o){const d=parseDl(o.dl);if(!d)return null;const t=new Date();t.setHours(0,0,0,0);return Math.round((d-t)/864e5);}
+function leftTxt(n){if(n===null)return'без срока';if(n<0)return'просрочен '+(-n)+' дн.';if(n===0)return'сегодня';if(n===1)return'завтра';return'через '+n+' дн.';}
+function isDone(o){return o.color==='done';}
 
 let ORDERS=[
-  {id:'o1',num:'#OWN-0051',patient:'Сергеев А.В.',clinic:'Клиника Иванова И.И.',doctor:'Иванов И.И.',type:'10 виниров / е.мах',units:10,shade:'BL1',material:'IPS e.max',teeth:'13,12,11,21,22,23',dl:'24.05.2025',tech:'Артём К.',tk:'Артём',color:'blue',stage:5,prog:43,urgent:true,
+  {id:'o1',num:'#OWN-0051',patient:'Сергеев А.В.',clinic:'Клиника Иванова И.И.',doctor:'Иванов И.И.',type:'10 виниров / е.мах',units:10,shade:'BL1',material:'IPS e.max',teeth:'13,12,11,21,22,23',dl:dIn(2),tech:'Артём К.',tk:'Артём',color:'blue',stage:5,prog:43,urgent:true,
     files:[{n:'scan_upper.stl',i:'🦷'},{n:'scan_lower.stl',i:'🦷'},{n:'photo_pre.jpg',i:'📸'},{n:'tz_client.pdf',i:'📄'}],
     comments:[{av:'ИЖ',rc:'admin',au:'Иван Ж.',role:'Администратор',t:'Очень важный пациент. Ориентир BL1, без синевы.',time:'09:14'},{av:'АК',rc:'tech',au:'Артём К.',role:'Техник',t:'Принял в работу. Сканы хорошие, приступаю к CAD.',time:'10:32'}]},
-  {id:'o2',num:'#OWN-0052',patient:'Ким Н.В.',clinic:'Дент Плюс',doctor:'Петренко А.А.',type:'4 коронки / цирконий',units:4,shade:'A2',material:'Цирконий Ultra HT',teeth:'15,14,24,25',dl:'29.05.2025',tech:'Мария В.',tk:'Мария',color:'green',stage:2,prog:14,urgent:false,
+  {id:'o2',num:'#OWN-0052',patient:'Ким Н.В.',clinic:'Дент Плюс',doctor:'Петренко А.А.',type:'4 коронки / цирконий',units:4,shade:'A2',material:'Цирконий Ultra HT',teeth:'15,14,24,25',dl:dIn(5),tech:'Мария В.',tk:'Мария',color:'green',stage:2,prog:14,urgent:false,
     files:[{n:'scans.stl',i:'🦷'},{n:'foto.jpg',i:'📸'}],comments:[{av:'МВ',rc:'tech',au:'Мария В.',role:'Техник',t:'Заказ принят. Сканы отличного качества.',time:'11:00'}]},
-  {id:'o3',num:'#OWN-0053',patient:'Орлова М.С.',clinic:'Стомасервис',doctor:'Захаров П.В.',type:'Мостовидный протез',units:3,shade:'A3',material:'е.мах',teeth:'45,46,47',dl:'31.05.2025',tech:'Дмитрий Н.',tk:'Дмитрий',color:'yellow',stage:3,prog:21,urgent:false,needsData:true,
+  {id:'o3',num:'#OWN-0053',patient:'Орлова М.С.',clinic:'Стомасервис',doctor:'Захаров П.В.',type:'Мостовидный протез',units:3,shade:'A3',material:'е.мах',teeth:'45,46,47',dl:dIn(-1),tech:'Дмитрий Н.',tk:'Дмитрий',color:'yellow',stage:3,prog:21,urgent:false,needsData:true,
     files:[{n:'scan_jaw.stl',i:'🦷'}],comments:[{av:'ДН',rc:'tech',au:'Дмитрий Н.',role:'Техник',t:'⚠️ Скан неполный — нет 47 зуба. Прошу повторный скан.',time:'13:20'}]},
-  {id:'o4',num:'#OWN-0049',patient:'Волков Д.А.',clinic:'Клиника Иванова И.И.',doctor:'Иванов И.И.',type:'6 виниров / е.мах',units:6,shade:'BL2',material:'IPS e.max',teeth:'13,12,11,21,22,23',dl:'22.05.2025',tech:'Артём К.',tk:'Артём',color:'orange',stage:9,prog:86,urgent:true,
+  {id:'o4',num:'#OWN-0049',patient:'Волков Д.А.',clinic:'Клиника Иванова И.И.',doctor:'Иванов И.И.',type:'6 виниров / е.мах',units:6,shade:'BL2',material:'IPS e.max',teeth:'13,12,11,21,22,23',dl:dIn(1),tech:'Артём К.',tk:'Артём',color:'orange',stage:9,prog:86,urgent:true,
     files:[{n:'scan.stl',i:'🦷'},{n:'cad.3dm',i:'💻'},{n:'ready.jpg',i:'📸'}],comments:[{av:'АК',rc:'tech',au:'Артём К.',role:'Техник',t:'Виниры готовы. Цвет точно в BL2. Финальная QC.',time:'08:10'}]},
-  {id:'o5',num:'#OWN-0048',patient:'Петрова Е.И.',clinic:'Дент Плюс',doctor:'Петренко А.А.',type:'Полная реставрация / 12 ед.',units:12,shade:'A1',material:'Цирконий + е.мах',teeth:'17–27',dl:'21.05.2025',tech:'Мария В.',tk:'Мария',color:'delivery',stage:12,prog:92,urgent:false,trackNum:'СДЭК-847362819',trackSt:'В пути · прибытие сегодня до 18:00',
+  {id:'o5',num:'#OWN-0048',patient:'Петрова Е.И.',clinic:'Дент Плюс',doctor:'Петренко А.А.',type:'Полная реставрация / 12 ед.',units:12,shade:'A1',material:'Цирконий + е.мах',teeth:'17–27',dl:dIn(0),tech:'Мария В.',tk:'Мария',color:'delivery',stage:12,prog:92,urgent:false,trackNum:'СДЭК-847362819',trackSt:'В пути · прибытие сегодня до 18:00',
     files:[{n:'scan.stl',i:'🦷'},{n:'final.jpg',i:'📸'},{n:'invoice.pdf',i:'📄'}],comments:[{av:'МВ',rc:'tech',au:'Мария В.',role:'Техник',t:'Передала в СДЭК. Трек: СДЭК-847362819.',time:'07:45'}]},
-  {id:'o6',num:'#OWN-0054',patient:'Беляев К.О.',clinic:'Смайл Клиник',doctor:'Горина С.В.',type:'Имплант-корона / цирконий',units:1,shade:'A3.5',material:'Katana UTML',teeth:'36',dl:'05.06.2025',tech:'Дмитрий Н.',tk:'Дмитрий',color:'green',stage:1,prog:7,urgent:false,
+  {id:'o6',num:'#OWN-0054',patient:'Беляев К.О.',clinic:'Смайл Клиник',doctor:'Горина С.В.',type:'Имплант-корона / цирконий',units:1,shade:'A3.5',material:'Katana UTML',teeth:'36',dl:dIn(12),tech:'Дмитрий Н.',tk:'Дмитрий',color:'green',stage:1,prog:7,urgent:false,
     files:[{n:'scan.stl',i:'🦷'},{n:'xray.jpg',i:'📸'}],comments:[]},
 ];
 
-let selId=null, fStatus='all', fTech='all', fSearch='';
+const SET_KEY='ownlab_settings_v1';
+let SETTINGS={name:'Иван Ж.',initials:'ИЖ',role:'Администратор',techs:['Артём К.','Мария В.','Дмитрий Н.']};
+try{Object.assign(SETTINGS,JSON.parse(localStorage.getItem(SET_KEY))||{});}catch(e){}
+
+let selId=null, fStatus='all', fTech='all', fSearch='', fUrgent=false, sortBy='dl', curView='orders', stagesToday=0;
+
+// ── ПОИСК ─────────────────────────────────────────────────────────────────────
+const norm=s=>String(s||'').toLowerCase().replace(/ё/g,'е');
+// Каждое слово запроса должно найтись; допускаем другие окончания (Волкова → Волков)
+function matchQuery(o,q){
+  const hay=norm([o.num,o.patient,o.clinic,o.doctor,o.type,o.tech,o.material,o.teeth,o.shade].join(' '));
+  const words=hay.split(/[\s,.#\/()·+\-–]+/).filter(Boolean);
+  return norm(q).split(/\s+/).filter(Boolean).every(t=>
+    hay.includes(t)||words.some(w=>w.length>=4&&t.startsWith(w))||(t.length>=5&&hay.includes(t.slice(0,-2))));
+}
 
 // ── РЕНДЕР ЗАКАЗОВ ────────────────────────────────────────────────────────────
+const SORTS={dl:'По сроку',created:'Сначала новые',num:'По номеру',prog:'По готовности',patient:'По пациенту'};
+function sortOrders(arr){
+  const key=o=>parseDl(o.dl)?.getTime()??Infinity;
+  const num=o=>parseInt(String(o.num).replace(/\D/g,''))||0;
+  const f={dl:(a,b)=>key(a)-key(b),created:(a,b)=>num(b)-num(a),num:(a,b)=>num(a)-num(b),prog:(a,b)=>b.prog-a.prog,patient:(a,b)=>a.patient.localeCompare(b.patient,'ru')}[sortBy];
+  return arr.slice().sort(f);
+}
+function statusName(s){if(s==='all')return'Все заказы';if(s==='active')return'Заказы в работе';const g=GROUPS.find(x=>x[0]===s);return g?g[2]:s;}
 function renderOrders(){
   const list=document.getElementById('ordersList');
-  const filtered=ORDERS.filter(o=>{
-    const ms=fStatus==='all'||o.color===fStatus;
-    const mt=fTech==='all'||o.tk===fTech;
-    const q=fSearch.toLowerCase();
-    const mq=!q||[o.patient,o.clinic,o.num,o.type].some(v=>v.toLowerCase().includes(q));
-    return ms&&mt&&mq;
-  });
-  if(!filtered.length){list.innerHTML=`<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">Заказы не найдены</div><div>Измените фильтр или создайте новый заказ</div></div>`;return;}
+  const filtered=sortOrders(ORDERS.filter(o=>{
+    const ms=fStatus==='all'||(fStatus==='active'?!isDone(o):o.color===fStatus);
+    const mt=fTech==='all'||o.tech===fTech;
+    const mu=!fUrgent||o.urgent;
+    return ms&&mt&&mu&&(!fSearch.trim()||matchQuery(o,fSearch));
+  }));
+  document.getElementById('secTitle').textContent=statusName(fStatus)+' · '+filtered.length;
+  const chips=[];
+  if(fStatus!=='all') chips.push(['Статус: '+statusName(fStatus),"setFilter({status:'all'})"]);
+  if(fTech!=='all') chips.push(['Техник: '+fTech,"setFilter({tech:'all'})"]);
+  if(fUrgent) chips.push(['Только срочные',"setFilter({urgent:false})"]);
+  if(fSearch.trim()) chips.push(['Поиск: «'+fSearch.trim()+'»','clearSearch()']);
+  document.getElementById('fChips').innerHTML=chips.map(([t,a])=>`<span class="f-chip">${esc(t)}<button onclick="${a}" title="Убрать">✕</button></span>`).join('');
+  updateCounts();
+  if(!filtered.length){list.innerHTML=`<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">Заказы не найдены</div><div>Измените фильтр или создайте новый заказ</div>${chips.length?'<button class="empty-reset" onclick="resetFilters()">Сбросить все фильтры</button>':''}</div>`;return;}
   list.innerHTML=filtered.map(o=>{
-    const st=STAGES[o.stage-1];
+    const st=STAGES[o.stage-1], dleft=daysLeft(o), over=dleft!==null&&dleft<0&&!isDone(o);
     return`<div class="order-card c-${o.color}${selId===o.id?' selected':''}" onclick="openDetail('${o.id}')">
       <div class="c-top">
-        <span class="c-id">${o.num}</span>
-        <span class="c-patient">${o.patient}</span>
-        <span class="c-type">${o.type}</span>
-        <span class="c-dl${o.urgent?' urg':''}">${o.urgent?'⚡ ':''}до ${o.dl}</span>
+        <span class="c-id">${esc(o.num)}</span>
+        <span class="c-patient">${esc(o.patient)}</span>
+        <span class="c-type">${esc(o.type)}</span>
+        <span class="c-dl${over?' over':o.urgent?' urg':''}" title="${leftTxt(dleft)}">${o.urgent?'⚡ ':''}${over?'просрочен · ':''}до ${esc(o.dl)}</span>
       </div>
       <div class="c-bot">
-        <span class="c-clinic">🏥 ${o.clinic} · ${o.tech}</span>
+        <span class="c-clinic">🏥 ${esc(o.clinic)} · ${esc(o.tech)}</span>
         <span class="status-badge ${SBADGE[o.color]}">${st.e} ${st.n}</span>
       </div>
       <div class="progress-bar"><div class="progress-fill" style="width:${o.prog}%"></div></div>
@@ -537,7 +660,7 @@ function openDetail(id){
   const o=ORDERS.find(x=>x.id===id); if(!o) return;
   document.getElementById('dp-title').textContent=o.patient;
   document.getElementById('dp-sub').textContent=o.num+' · '+o.clinic;
-  document.getElementById('dp-meta').innerHTML=[o.num,`🦷 ${o.type}`,`👤 ${o.tech}`,o.urgent?'⚡ Срочный':null].filter(Boolean).map(t=>`<span class="meta-tag">${t}</span>`).join('');
+  document.getElementById('dp-meta').innerHTML=[o.num,`🦷 ${o.type}`,`👤 ${o.tech}`,o.urgent?'⚡ Срочный':null].filter(Boolean).map(t=>`<span class="meta-tag">${esc(t)}</span>`).join('');
   renderInfoTab(o); renderTL(o); renderFiles(o); renderComments(o);
   document.getElementById('detPanel').classList.add('open');
   renderOrders();
@@ -546,7 +669,7 @@ function closeDetail(){selId=null;document.getElementById('detPanel').classList.
 
 function renderInfoTab(o){
   const rows=[['Номер заказа',o.num,'var(--org)'],['Пациент',o.patient],['Клиника',o.clinic],['Врач',o.doctor||'—'],['Тип работы',o.type],['Единиц',o.units+' ед.'],['Зубы',o.teeth||'—'],['Материал',o.material||'—'],['Оттенок',o.shade||'—'],['Срок','📅 '+o.dl,o.urgent?'var(--red)':'var(--org)']];
-  document.getElementById('dp-info-rows').innerHTML=rows.map(([k,v,c])=>`<div class="info-row"><span class="ik">${k}</span><span class="iv"${c?` style="color:${c}"`:''} >${v}</span></div>`).join('');
+  document.getElementById('dp-info-rows').innerHTML=rows.map(([k,v,c])=>`<div class="info-row"><span class="ik">${k}</span><span class="iv"${c?` style="color:${c}"`:''} >${esc(v)}</span></div>`).join('');
   document.getElementById('dp-stage-lbl').textContent=`Этап ${o.stage} из 14: ${STAGES[o.stage-1].n}`;
   document.getElementById('dp-pct').textContent=o.prog+'%';
   document.getElementById('dp-prog').style.width=o.prog+'%';
@@ -575,7 +698,7 @@ function renderTL(o){
     }
     let acts='';
     if(isAct){
-      if(isWarn){acts=`<div class="tl-actions"><button class="tl-btn warn-btn" onclick="doAction('needsData','${o.id}')">⚠️ Требуются данные</button><button class="tl-btn sec">✉️ Написать врачу</button></div>`;}
+      if(isWarn){acts=`<div class="tl-actions"><button class="tl-btn warn-btn" onclick="doAction('needsData','${o.id}')">⚠️ Требуются данные</button><button class="tl-btn sec" onclick="doAction('writeDoctor','${o.id}')">✉️ Написать врачу</button></div>`;}
       else if(st.approval){acts=`<div class="approval-box"><div class="approval-status">⏳ Ожидает согласования врача</div><div style="font-size:10px;color:var(--t4);margin-bottom:10px">3D-визуализация отправлена врачу ${o.doctor}</div><div class="tl-actions"><button class="tl-btn success" onclick="doAction('approved','${o.id}')">✅ Согласовано</button><button class="tl-btn danger" onclick="doAction('revision','${o.id}')">🔄 На доработку</button><button class="tl-btn sec" onclick="doAction('resend','${o.id}')">📩 Повторно</button></div></div>`;}
       else if(st.tracking){acts=`<div class="tracking-box"><div style="font-size:10px;color:var(--t3)">Трек-номер:</div><div class="tracking-num">${o.trackNum||'—'}</div><div class="tracking-status-txt">${o.trackSt||''}</div></div><div class="tl-actions"><button class="tl-btn success" onclick="doAction('received','${o.id}')">✅ Клиника получила</button><button class="tl-btn purple-btn" onclick="doAction('track','${o.id}')">🔍 Отследить</button></div>`;}
       else if(n<13){acts=`<div class="tl-actions"><button class="tl-btn primary" onclick="doAction('next','${o.id}')">Следующий этап →</button><button class="tl-btn sec" onclick="doAction('photo','${o.id}')">📸 Добавить фото</button></div>`;}
@@ -641,7 +764,7 @@ function loadDict(){
   try{saved=JSON.parse(localStorage.getItem(DICT_KEY))||{};}catch(e){}
   const d={};
   DICT_FIELDS.forEach(k=>{
-    const seed=ORDERS.map(o=>o[k]).concat(k==='tech'?['Артём К.','Мария В.','Дмитрий Н.']:[]);
+    const seed=ORDERS.map(o=>o[k]).concat(k==='tech'?SETTINGS.techs:[]);
     d[k]=uniq((saved[k]||[]).concat(seed));
   });
   return d;
@@ -686,7 +809,7 @@ DICT_FIELDS.forEach(attachSuggest);
 function renderComments(o){
   const c=document.getElementById('dp-comments');
   if(!(o.comments?.length)){c.innerHTML=`<div style="text-align:center;padding:40px 0;color:var(--t4)"><div style="font-size:30px;margin-bottom:10px">💬</div><div style="font-weight:600;color:var(--t3)">Комментариев пока нет</div></div>`;return;}
-  c.innerHTML=o.comments.map(cm=>`<div class="comment-item"><div class="c-av ${cm.rc}">${cm.av}</div><div class="c-bubble"><div class="c-meta"><span class="c-author">${cm.au}</span><span class="c-role">${cm.role}</span><span class="c-time">${cm.time}</span></div><div class="c-text">${cm.t}</div></div></div>`).join('');
+  c.innerHTML=o.comments.map(cm=>`<div class="comment-item"><div class="c-av ${cm.rc}">${esc(cm.av)}</div><div class="c-bubble"><div class="c-meta"><span class="c-author">${esc(cm.au)}</span><span class="c-role">${esc(cm.role)}</span><span class="c-time">${cm.time}</span></div><div class="c-text">${esc(cm.t)}</div></div></div>`).join('');
   c.scrollTop=c.scrollHeight;
 }
 
@@ -694,7 +817,7 @@ function sendComment(){
   const inp=document.getElementById('commentInput');
   const txt=inp.value.trim(); if(!txt||!selId) return;
   const o=ORDERS.find(x=>x.id===selId); if(!o) return;
-  o.comments.push({av:'ИЖ',rc:'admin',au:'Иван Ж.',role:'Администратор',t:txt,time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})});
+  o.comments.push({av:SETTINGS.initials,rc:SETTINGS.role==='Техник'?'tech':'admin',au:SETTINGS.name,role:SETTINGS.role,t:txt,time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})});
   inp.value=''; renderComments(o); showToast('Отправлено','Техник уведомлён');
 }
 
@@ -705,15 +828,16 @@ function doAction(action,id){
   const o=ORDERS.find(x=>x.id===id); if(!o) return;
   if(action==='next'&&o.stage<14){
     o.stage++; o.prog=Math.min(100,Math.round((o.stage/14)*100));
-    o.color=STAGES[o.stage-1].c;
+    o.color=STAGES[o.stage-1].c; stagesToday++;
     renderOrders(); openDetail(id); showToast('Этап обновлён','Этап '+o.stage+': '+STAGES[o.stage-1].n);
   } else if(action==='needsData') showToast('Запрос данных','Уведомление отправлено врачу '+o.doctor,'warning');
   else if(action==='approved'){showToast('Дизайн согласован ✅','Запускаем производство');setTimeout(()=>doAction('next',id),400);}
   else if(action==='revision') showToast('На доработку 🔄','Техник уведомлён','warning');
   else if(action==='resend') showToast('Визуализация отправлена 📩','На email врача');
   else if(action==='received'){showToast('Клиника получила ✅','Завершаем заказ');setTimeout(()=>doAction('next',id),400);}
-  else if(action==='track') showToast('Трекинг',o.trackNum||'—');
-  else if(action==='photo') showToast('Фото','Доступно в полной версии');
+  else if(action==='track'){const n=String(o.trackNum||'').replace(/\D/g,'');if(n)window.open('https://www.cdek.ru/ru/tracking/?order_id='+n,'_blank','noopener');else showToast('Трекинг','Трек-номер не указан','warning');}
+  else if(action==='photo') document.getElementById('dp-file-input').click();
+  else if(action==='writeDoctor'){switchTab('comments',document.querySelectorAll('.det-tab')[3]);const i=document.getElementById('commentInput');i.value='Врачу '+(o.doctor||'')+': ';i.focus();}
 }
 
 // ── ТАБЫ ──────────────────────────────────────────────────────────────────────
@@ -725,17 +849,198 @@ function switchTab(id,el){
 }
 
 // ── ФИЛЬТРЫ ───────────────────────────────────────────────────────────────────
-function filterStatus(s,el){
-  fStatus=s;
-  document.querySelectorAll('.nav-item[onclick*="filterStatus"]').forEach(i=>i.classList.remove('active'));
-  el.classList.add('active'); renderOrders();
+function setFilter(p){
+  if('status' in p) fStatus=p.status;
+  if('tech' in p) fTech=p.tech;
+  if('urgent' in p) fUrgent=p.urgent;
+  if('search' in p){fSearch=p.search;document.getElementById('searchInput').value=p.search;syncSearch();}
+  showView('orders');
 }
-function filterTech(t,el){
-  fTech=t;
-  document.querySelectorAll('.nav-item[onclick*="filterTech"]').forEach(i=>i.classList.remove('active'));
-  el.classList.add('active'); renderOrders();
+function filterStatus(s){setFilter({status:s});}
+function filterTech(t){setFilter({tech:t});}
+function chipFilter(k){
+  if(k==='urgent') setFilter({urgent:!fUrgent});
+  else setFilter({status:fStatus===k?'all':k});
 }
-function searchOrders(q){fSearch=q;renderOrders();}
+function resetFilters(){setFilter({status:'all',tech:'all',urgent:false,search:''});}
+function syncSearch(){document.getElementById('searchClear').classList.toggle('show',!!fSearch);}
+function searchOrders(q){fSearch=q;syncSearch();if(curView!=='orders')showView('orders');else renderOrders();}
+function clearSearch(){setFilter({search:''});document.getElementById('searchInput').focus();}
+
+// Счётчики в меню, на плашках и в блоке «Сегодня»
+function updateCounts(){
+  const cnt=c=>ORDERS.filter(o=>o.color===c).length;
+  document.getElementById('status-nav').innerHTML=[['all','📋','Все заказы',ORDERS.length]].concat(GROUPS.map(g=>[g[0],g[1],g[2],cnt(g[0])]))
+    .map(([s,e,n,c])=>`<div class="nav-item${curView==='orders'&&fStatus===s?' active':''}" onclick="filterStatus('${s}')">${e} ${n} <span class="nav-cnt">${c}</span></div>`).join('');
+  const icons=['🔷','🔶','🔹','🔸','🟦','🟧'];
+  document.getElementById('tech-nav').innerHTML=[['all','👥 Все техники']].concat(allTechs().map((t,i)=>[t,icons[i%icons.length]+' '+t]))
+    .map(([t,l])=>`<div class="nav-item${curView==='orders'&&fTech===t?' active':''}" onclick='filterTech(${JSON.stringify(t).replace(/'/g,"&#39;")})'>${esc(l)} ${t==='all'?'':`<span class="nav-cnt">${ORDERS.filter(o=>o.tech===t&&!isDone(o)).length}</span>`}</div>`).join('');
+  document.querySelectorAll('.nav-item[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===curView));
+  const active=ORDERS.filter(o=>!isDone(o));
+  const over=active.filter(o=>(daysLeft(o)??0)<0).length;
+  document.getElementById('stat-active').textContent=active.length;
+  document.getElementById('stat-urgent').textContent=active.filter(o=>o.urgent).length;
+  document.getElementById('stat-done').textContent=ORDERS.filter(isDone).length;
+  document.getElementById('chip-active').classList.toggle('on',fStatus==='active');
+  document.getElementById('chip-urgent').classList.toggle('on',fUrgent);
+  document.getElementById('chip-done').classList.toggle('on',fStatus==='done');
+  document.getElementById('st-stages').textContent=stagesToday;
+  document.getElementById('st-today').textContent=active.filter(o=>daysLeft(o)===0).length;
+  document.getElementById('st-over').textContent=over;
+  document.getElementById('cnt-over').textContent=over?'⚠ '+over:'';
+  document.getElementById('sortBtn').textContent=SORTS[sortBy]+' ▾';
+  document.getElementById('notif-dot').classList.toggle('hidden',notifications().length<=seenNotif);
+}
+function allTechs(){return uniq(SETTINGS.techs.concat(ORDERS.map(o=>o.tech)));}
+
+// ── ВСПЛЫВАЮЩИЕ МЕНЮ ──────────────────────────────────────────────────────────
+function closePops(except){document.querySelectorAll('.pop.open').forEach(p=>{if(p.id!==except)p.classList.remove('open');});}
+function togglePop(id,e){
+  e?.stopPropagation();
+  const p=document.getElementById(id), willOpen=!p.classList.contains('open');
+  closePops(id);
+  if(willOpen){({'pop-sort':renderSortMenu,'pop-user':renderUserMenu,'pop-bell':renderBell}[id])();p.classList.add('open');}
+  else p.classList.remove('open');
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.pop-wrap'))closePops();});
+function renderSortMenu(){
+  document.getElementById('pop-sort').innerHTML=Object.entries(SORTS).map(([k,l])=>`<div class="pop-item${k===sortBy?' sel':''}" onclick="sortBy='${k}';closePops();renderOrders()">${l}</div>`).join('');
+}
+function renderUserMenu(){
+  document.getElementById('pop-user').innerHTML=`<div class="pop-head">${esc(SETTINGS.name)} · ${esc(SETTINGS.role)}</div>
+    <div class="pop-item ico" onclick="closePops();showView('settings')">⚙️ Настройки профиля</div>
+    <div class="pop-item ico" onclick="closePops();showView('analytics')">📊 Аналитика</div>
+    <div class="pop-item ico" onclick="closePops();showView('deadlines')">⏱ Сроки</div>`;
+}
+
+// ── УВЕДОМЛЕНИЯ ───────────────────────────────────────────────────────────────
+let seenNotif=0;
+function notifications(){
+  const n=[];
+  ORDERS.filter(o=>!isDone(o)).forEach(o=>{
+    const d=daysLeft(o), who=o.num+' · '+o.patient;
+    if(d!==null&&d<0) n.push(['🔴','Просрочен срок',who+' · '+leftTxt(d),o.id]);
+    else if(d===0) n.push(['📅','Срок сдачи сегодня',who,o.id]);
+    else if(o.urgent&&d!==null&&d<=2) n.push(['⚡','Срочный заказ',who+' · '+leftTxt(d),o.id]);
+    if(o.needsData&&STAGES[o.stage-1].warn) n.push(['⚠️','Не хватает данных',who+' · нужен повторный скан',o.id]);
+    if(STAGES[o.stage-1].approval) n.push(['⏳','Ждёт согласования дизайна',who+' · врач '+o.doctor,o.id]);
+    if(STAGES[o.stage-1].tracking) n.push(['🚚','В пути к клинике',who+' · '+(o.trackNum||''),o.id]);
+  });
+  return n;
+}
+function toggleBell(e){togglePop('pop-bell',e);seenNotif=notifications().length;updateCounts();}
+function renderBell(){
+  const n=notifications();
+  document.getElementById('pop-bell').innerHTML=`<div class="pop-head">Уведомления · ${n.length}</div>`+
+    (n.length?n.map(([i,t,s,id])=>`<div class="pop-item ico" onclick="closePops();openDetail('${id}')"><span>${i}</span><span>${esc(t)}<span class="pop-sub">${esc(s)}</span></span></div>`).join(''):'<div class="pop-empty">Новых событий нет</div>');
+}
+
+// ── РАЗДЕЛЫ ───────────────────────────────────────────────────────────────────
+function showView(v){
+  curView=v;
+  document.getElementById('view-orders').style.display=v==='orders'?'':'none';
+  ['analytics','deadlines','settings'].forEach(k=>document.getElementById('view-'+k).classList.toggle('open',k===v));
+  if(v!=='orders'){selId=null;document.getElementById('detPanel').classList.remove('open');}
+  if(v==='analytics')renderAnalytics();
+  if(v==='deadlines')renderDeadlines();
+  if(v==='settings')renderSettings();
+  renderOrders();
+  document.getElementById('mainArea').scrollTop=0;
+}
+function bars(rows,max,onclick){
+  return rows.map(([l,v,txt,arg])=>`<div class="bar-row" onclick='${onclick}(${JSON.stringify(arg??l).replace(/'/g,"&#39;")})' title="Показать заказы"><span class="bar-lbl">${esc(l)}</span><div class="bar-track"><div class="bar-fill" style="width:${max?Math.round(v/max*100):0}%"></div></div><span class="bar-val">${txt??v}</span></div>`).join('')||'<div class="pop-empty">Нет данных</div>';
+}
+function countBy(arr,f){const m={};arr.forEach(o=>{const k=f(o)||'—';m[k]=(m[k]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);}
+function renderAnalytics(){
+  const act=ORDERS.filter(o=>!isDone(o));
+  const units=act.reduce((s,o)=>s+(+o.units||0),0);
+  const avg=act.length?Math.round(act.reduce((s,o)=>s+o.prog,0)/act.length):0;
+  const over=act.filter(o=>(daysLeft(o)??0)<0).length;
+  const st=GROUPS.map(g=>[g[1]+' '+g[2],ORDERS.filter(o=>o.color===g[0]).length,null,g[0]]);
+  const techs=allTechs().map(t=>{const a=act.filter(o=>o.tech===t);return[t,a.reduce((s,o)=>s+(+o.units||0),0),a.length+' зак. · '+a.reduce((s,o)=>s+(+o.units||0),0)+' ед.'];}).sort((a,b)=>b[1]-a[1]);
+  const clin=countBy(ORDERS,o=>o.clinic), types=countBy(ORDERS,o=>o.type);
+  const mx=a=>Math.max(1,...a.map(r=>r[1]));
+  document.getElementById('view-analytics').innerHTML=`
+    <div class="page-ttl">📊 Аналитика</div><div class="page-sub">Сводка по всем заказам. Нажмите на строку, чтобы открыть список заказов.</div>
+    <div class="kpi-row">
+      <div class="kpi"><div class="kn">${ORDERS.length}</div><div class="kl">Всего заказов</div></div>
+      <div class="kpi"><div class="kn" style="color:var(--org)">${act.length}</div><div class="kl">В работе</div></div>
+      <div class="kpi"><div class="kn" style="color:var(--red)">${act.filter(o=>o.urgent).length}</div><div class="kl">⚡ Срочных</div></div>
+      <div class="kpi"><div class="kn" style="color:${over?'var(--red)':'var(--green)'}">${over}</div><div class="kl">Просрочено</div></div>
+      <div class="kpi"><div class="kn">${units}</div><div class="kl">Единиц в работе</div></div>
+      <div class="kpi"><div class="kn" style="color:var(--blue)">${avg}%</div><div class="kl">Средняя готовность</div></div>
+    </div>
+    <div class="p-grid">
+      <div class="p-card"><div class="p-card-ttl">По этапам</div>${bars(st,mx(st),'filterStatus')}</div>
+      <div class="p-card"><div class="p-card-ttl">Загрузка техников (активные)</div>${bars(techs,mx(techs),'filterTech')}</div>
+      <div class="p-card"><div class="p-card-ttl">Клиники</div>${bars(clin,mx(clin),'searchFor')}</div>
+      <div class="p-card"><div class="p-card-ttl">Типы работ</div>${bars(types,mx(types),'searchFor')}</div>
+    </div>`;
+}
+function searchFor(q){setFilter({status:'all',tech:'all',urgent:false,search:q});}
+function renderDeadlines(){
+  const act=ORDERS.filter(o=>!isDone(o)).map(o=>[o,daysLeft(o)]).sort((a,b)=>(a[1]??1e9)-(b[1]??1e9));
+  const groups=[['🔴 Просрочено','var(--red)',d=>d!==null&&d<0],['📅 Сегодня','var(--org)',d=>d===0],['Завтра','var(--yellow)',d=>d===1],['Ближайшие 7 дней','var(--t2)',d=>d>1&&d<=7],['Позже','var(--t3)',d=>d>7],['Без срока','var(--t4)',d=>d===null]];
+  const cls=d=>d===null?'ok':d<0?'over':d===0?'today':d<=2?'soon':'ok';
+  document.getElementById('view-deadlines').innerHTML=`<div class="page-ttl">⏱ Сроки</div><div class="page-sub">Активные заказы по дате сдачи. Нажмите на заказ, чтобы открыть карточку.</div>`+
+    groups.map(([t,c,f])=>{const rows=act.filter(([,d])=>f(d));if(!rows.length)return'';
+      return`<div class="dl-group"><div class="dl-gttl" style="color:${c}">${t} <span>${rows.length}</span></div>`+rows.map(([o,d])=>`<div class="dl-row" onclick="openDetail('${o.id}')"><span class="dl-date">${esc(o.dl)}</span><span class="dl-left ${cls(d)}">${leftTxt(d)}</span><span class="dl-main">${o.urgent?'⚡ ':''}<b>${esc(o.patient)}</b><small>${esc(o.num)} · ${esc(o.type)}</small></span><span class="dl-tech">👤 ${esc(o.tech)}</span><div class="bar-track" title="Готовность ${o.prog}%"><div class="bar-fill" style="width:${o.prog}%"></div></div></div>`).join('')+'</div>';}).join('')
+    +(act.length?'':'<div class="empty-state"><div class="empty-icon">🎉</div><div class="empty-text">Активных заказов нет</div></div>');
+}
+
+// ── НАСТРОЙКИ ─────────────────────────────────────────────────────────────────
+function saveSettings(){try{localStorage.setItem(SET_KEY,JSON.stringify(SETTINGS));}catch(e){}applySettings();}
+function applySettings(){document.getElementById('avatar').textContent=SETTINGS.initials;}
+function initialsOf(n){return n.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('')||'?';}
+function saveProfile(){
+  const n=document.getElementById('set-name').value.trim();
+  if(!n){showToast('Укажите имя','','error');return;}
+  SETTINGS.name=n; SETTINGS.initials=initialsOf(n); SETTINGS.role=document.getElementById('set-role').value;
+  saveSettings(); showToast('Профиль сохранён',SETTINGS.name+' · '+SETTINGS.role);
+}
+function addTech(){
+  const i=document.getElementById('set-tech'), v=i.value.trim(); if(!v) return;
+  SETTINGS.techs=uniq(SETTINGS.techs.concat(v)); remember('tech',v); saveSettings(); renderSettings(); updateCounts();
+  showToast('Техник добавлен',v); document.getElementById('set-tech').focus();
+}
+function removeTech(i){const t=SETTINGS.techs.splice(i,1)[0];saveSettings();renderSettings();updateCounts();showToast('Техник убран из списка',t+' · его заказы сохранены','warning');}
+function clearDict(){
+  if(!confirm('Удалить сохранённые подсказки (пациенты, клиники, врачи, техники)?'))return;
+  try{localStorage.removeItem(DICT_KEY);}catch(e){}
+  Object.assign(DICT,loadDict()); renderSettings(); showToast('Подсказки очищены','Остались значения из текущих заказов');
+}
+function exportCSV(){
+  const cols=[['num','Номер'],['patient','Пациент'],['clinic','Клиника'],['doctor','Врач'],['type','Тип работы'],['units','Единиц'],['teeth','Зубы'],['material','Материал'],['shade','Оттенок'],['dl','Срок'],['tech','Техник'],['prog','Готовность %']];
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  const rows=[cols.map(c=>c[1]).concat('Этап','Срочный')].concat(ORDERS.map(o=>cols.map(c=>o[c[0]]).concat(STAGES[o.stage-1].n,o.urgent?'да':'нет')));
+  const blob=new Blob(['﻿'+rows.map(r=>r.map(q).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='ownlab-orders-'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
+  showToast('Экспорт готов',ORDERS.length+' заказов · CSV для Excel');
+}
+function renderSettings(){
+  const roles=['Администратор','Менеджер','Техник','Контроль качества'];
+  document.getElementById('view-settings').innerHTML=`
+    <div class="page-ttl">⚙️ Настройки</div><div class="page-sub">Настройки сохраняются в этом браузере.</div>
+    <div class="p-card"><div class="p-card-ttl">Профиль</div>
+      <div class="set-row"><label for="set-name">Имя</label><input class="set-input" id="set-name" value="${esc(SETTINGS.name)}" placeholder="Имя Ф."></div>
+      <div class="set-row"><label for="set-role">Роль</label><select class="set-input" id="set-role">${roles.map(r=>`<option${r===SETTINGS.role?' selected':''}>${r}</option>`).join('')}</select></div>
+      <div class="set-row"><label></label><button class="set-btn" onclick="saveProfile()">Сохранить</button></div>
+      <div class="set-note">Имя и роль подставляются в сообщения в чате заказа и в аватар в шапке.</div>
+    </div>
+    <div class="p-card"><div class="p-card-ttl">Техники</div>
+      <div class="tech-tags">${SETTINGS.techs.map((t,i)=>`<span class="tech-tag">${esc(t)}<button onclick="removeTech(${i})" title="Убрать">✕</button></span>`).join('')||'<span class="set-note">Список пуст</span>'}</div>
+      <div class="set-row"><input class="set-input" id="set-tech" placeholder="Имя Ф. нового техника" onkeydown="if(event.key==='Enter')addTech()"><button class="set-btn" onclick="addTech()">＋ Добавить</button></div>
+      <div class="set-note">Список используется в фильтре «По технику» и в подсказках при создании заказа.</div>
+    </div>
+    <div class="p-card"><div class="p-card-ttl">Подсказки при вводе</div>
+      ${[['patient','Пациенты'],['clinic','Клиники'],['doctor','Врачи'],['tech','Техники']].map(([k,l])=>`<div class="sb-stat"><span class="sk">${l}</span><span class="sv">${DICT[k].length}</span></div>`).join('')}
+      <div class="set-row" style="margin-top:10px"><button class="set-btn danger" onclick="clearDict()">Очистить сохранённые подсказки</button></div>
+    </div>
+    <div class="p-card"><div class="p-card-ttl">Данные</div>
+      <div class="set-row"><button class="set-btn sec" onclick="exportCSV()">⬇️ Экспорт заказов в CSV</button><button class="set-btn danger" onclick="if(confirm('Вернуть демо-данные? Созданные заказы и файлы пропадут.'))location.reload()">↺ Сбросить демо-данные</button></div>
+      <div class="set-note">Демо-версия: заказы и файлы хранятся только в открытой вкладке и пропадают после обновления страницы.</div>
+    </div>`;
+}
 
 // ── МОДАЛКА ───────────────────────────────────────────────────────────────────
 function openModal(){document.getElementById('modalOverlay').classList.add('open');}
@@ -746,7 +1051,7 @@ function submitOrder(){
   const req=[{id:'f-patient',l:'Пациент'},{id:'f-clinic',l:'Клиника'},{id:'f-type',l:'Тип работы'},{id:'f-units',l:'Количество'},{id:'f-deadline',l:'Срок'}];
   for(const f of req){if(!document.getElementById(f.id).value.trim()){showToast('Заполните поле',f.l+' — обязательное','error');document.getElementById(f.id).focus();return;}}
   const types={veneers_emax:'Виниры (е.мах)',crown_zirconia:'Коронки (цирконий)',crown_emax:'Коронки (е.мах)',bridge:'Мостовидный протез',implant_crown:'Имплант-корона',full_mouth:'Полная реставрация',temp:'Временные (ПММА)'};
-  const num='#OWN-0'+(55+ORDERS.length);
+  const num='#OWN-'+String(Math.max(0,...ORDERS.map(o=>parseInt(String(o.num).replace(/\D/g,''))||0))+1).padStart(4,'0');
   const dlRaw=document.getElementById('f-deadline').value;
   const dl=dlRaw?new Date(dlRaw).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'}):'—';
   const techVal=document.getElementById('f-tech').value.trim();
@@ -773,9 +1078,13 @@ function showToast(title,sub='',type='success'){
 }
 
 // ── КЛАВИШИ ───────────────────────────────────────────────────────────────────
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDetail();closeModal();}});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){if(document.querySelector('.pop.open')){closePops();return;}closeDetail();closeModal();}
+  if(e.key==='/'&&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){e.preventDefault();showView('orders');document.getElementById('searchInput').focus();}
+});
 
 // ── СТАРТ ─────────────────────────────────────────────────────────────────────
+applySettings();
 renderOrders();
 openDetail('o1');
 switchTab('timeline', document.querySelectorAll('.det-tab')[1]);
