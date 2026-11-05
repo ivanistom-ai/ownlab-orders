@@ -10,7 +10,7 @@
   const BUCKET = 'order-files', MAX_CLOUD_FILE = 50 * 1024 * 1024;
   const TOKEN_KEY = 'ownlab_pending_invite';
   const DEMO_ORDERS = ORDERS.slice();
-  let sb = null, ME = null, CLINICS = [], PEOPLE = [], INVITES = [], LAB = {}, SELLER = {}, TECH_RATES = {}, BOT = null, MY_TG = null, CLINIC_PRICING = {};
+  let sb = null, ME = null, CLINICS = [], PEOPLE = [], INVITES = [], LAB = {}, SELLER = {}, TECH_RATES = {}, BOT = null, MY_TG = null, CLINIC_PRICING = {}, SEC = {};
   const orig = { renderInfoTab, renderTL, renderAnalytics, showView, renderUserMenu, updateCounts, doAction, openModal };
 
   const $ = id => document.getElementById(id);
@@ -194,8 +194,12 @@
       }
       const pendingOwner = localStorage.getItem('ownlab_pending_owner');
       if (pendingOwner) { try { await q(sb.rpc('claim_owner', { p_name: pendingOwner })); } catch (e) { } localStorage.removeItem('ownlab_pending_owner'); }
+      const lvl = (await sb.auth.mfa.getAuthenticatorAssuranceLevel()).data || {};
+      if (lvl.nextLevel === 'aal2' && lvl.currentLevel !== 'aal2') return mfaChallenge();
       ME = (await q(sb.from('profiles').select('*').eq('id', session.user.id))).at(0) || { email: session.user.email };
       if (!ME.role || !ME.active) return noAccess();
+      SEC = (await sb.rpc('security_status')).data || {};
+      if (SEC.require_mfa_staff && ['owner', 'lab_admin'].includes(ME.role) && lvl.currentLevel !== 'aal2') return mfaEnroll(true);
       await loadAll();
       applyRoleUI();
       auth.classList.add('hide');
@@ -205,6 +209,95 @@
       if (link) { if (ORDERS.some(o => o.id === link)) openDetail(link); else showToast('Заказ не найден', 'Нет доступа или заказ удалён', 'warning'); history.replaceState(null, '', location.pathname); }
     } catch (e) { err('Ошибка загрузки', e); showLogin(e.message); }
   }
+
+  // ── ДВУХФАКТОРНЫЙ ВХОД (TOTP) ───────────────────────────────────────────────
+  async function totpFactor() { const r = await sb.auth.mfa.listFactors(); return (r.data?.totp || []).find(f => f.status === 'verified'); }
+  function mfaChallenge() {
+    authScreen(`<div class="au-ttl">Код подтверждения</div><div class="au-sub">Откройте приложение-аутентификатор (Яндекс Ключ, Google Authenticator и т. п.) и введите 6-значный код OWNLAB.</div>
+      ${field('au-code', 'Код', 'text', 'inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456"')}
+      <button class="modal-btn primary" onclick="CLOUD_UI.mfaVerify()">Войти</button>
+      <button class="au-link" onclick="CLOUD_UI.logout()">Выйти и войти под другим аккаунтом</button>
+      <div class="au-note">Потеряли телефон? Обратитесь к собственнику лаборатории — он сбросит двухфакторный вход в панели Supabase (Authentication → Users).</div>`);
+  }
+  async function mfaEnroll(forced) {
+    try {
+      const old = (await sb.auth.mfa.listFactors()).data?.all || [];
+      for (const f of old) if (f.status !== 'verified') await sb.auth.mfa.unenroll({ factorId: f.id });
+      const { data, error } = await sb.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'OWNLAB ' + new Date().toISOString().slice(0, 16) });
+      if (error) throw error;
+      MFA_NEW = data.id;
+      const html = `<div class="au-ttl">Двухфакторный вход</div>
+        <div class="au-sub">${forced ? 'Собственник включил обязательную защиту для администраторов. ' : ''}Отсканируйте QR-код в приложении-аутентификаторе (Яндекс Ключ, Google Authenticator, 1Password) и введите код из него.</div>
+        <div style="text-align:center"><img src="${esc(data.totp.qr_code)}" alt="QR" style="width:180px;height:180px;background:#fff;padding:6px;border-radius:8px"></div>
+        <div class="au-note" style="margin-top:6px;border:0;padding:0">Если сканировать неудобно, введите ключ вручную: <b style="font-family:var(--mono);word-break:break-all">${esc(data.totp.secret)}</b></div>
+        ${field('au-code', 'Код из приложения', 'text', 'inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456"')}
+        <button class="modal-btn primary" onclick="CLOUD_UI.mfaConfirm(${forced})">Подтвердить</button>
+        ${forced ? '<button class="au-link" onclick="CLOUD_UI.logout()">Выйти</button>' : '<button class="au-link" onclick="CLOUD_UI.mfaCancel()">Отмена</button>'}`;
+      authScreen(html);
+    } catch (e) { err('Не удалось включить 2FA', e); if (!forced) auth.classList.add('hide'); }
+  }
+  let MFA_NEW = null;
+  Object.assign(window.CLOUD_UI, {
+    async mfaVerify() {
+      busy(true); authErr('');
+      try { const f = await totpFactor(); const { error } = await sb.auth.mfa.challengeAndVerify({ factorId: f.id, code: v('au-code') }); if (error) throw error; start(); }
+      catch (e) { busy(false); authErr(/invalid|expired/i.test(e.message) ? 'Неверный или устаревший код' : e.message); }
+    },
+    async mfaConfirm(forced) {
+      busy(true); authErr('');
+      try {
+        const { error } = await sb.auth.mfa.challengeAndVerify({ factorId: MFA_NEW, code: v('au-code') }); if (error) throw error;
+        showToast('Двухфакторный вход включён', 'Теперь при входе нужен код из приложения');
+        if (forced) start(); else { auth.classList.add('hide'); renderSettings(); }
+      } catch (e) { busy(false); authErr(/invalid|expired/i.test(e.message) ? 'Неверный или устаревший код' : e.message); }
+    },
+    async mfaCancel() { if (MFA_NEW) await sb.auth.mfa.unenroll({ factorId: MFA_NEW }); MFA_NEW = null; auth.classList.add('hide'); },
+    mfaStart() { mfaEnroll(false); },
+    async mfaOff() {
+      const f = await totpFactor(); if (!f) return;
+      if (SEC.require_mfa_staff && isStaff()) return showToast('Нельзя отключить', 'Для администраторов 2FA обязательна', 'warning');
+      if (!confirm('Отключить двухфакторный вход для вашего аккаунта?')) return;
+      const { error } = await sb.auth.mfa.unenroll({ factorId: f.id });
+      error ? err('Не отключено', error) : (showToast('Двухфакторный вход отключён', '', 'warning'), renderSettings());
+    },
+    async mfaRequire(on) {
+      try { await q(sb.rpc('set_require_mfa', { p_on: on })); SEC.require_mfa_staff = on; showToast(on ? '2FA обязательна для администраторов' : 'Обязательная 2FA выключена'); }
+      catch (e) { err('Не изменено', e); }
+      renderSettings();
+    },
+  });
+  async function secCard() {
+    const f = await totpFactor(), lvl = (await sb.auth.mfa.getAuthenticatorAssuranceLevel()).data || {};
+    const el = $('sec-card'); if (!el) return;
+    el.innerHTML = `<div class="p-card-ttl">🔐 Безопасность входа</div>
+      <div class="set-row"><span>Двухфакторный вход: ${f ? '<span class="tg-ok">включён</span>' : '<b>выключен</b>'}</span>
+        ${f ? '<button class="set-btn sec" onclick="CLOUD_UI.mfaOff()">Отключить</button>' : '<button class="set-btn" onclick="CLOUD_UI.mfaStart()">Включить</button>'}</div>
+      ${role() === 'owner' ? `<label class="chk"><input type="checkbox"${SEC.require_mfa_staff ? ' checked' : ''}${lvl.currentLevel === 'aal2' ? '' : ' disabled'} onchange="CLOUD_UI.mfaRequire(this.checked)"> Обязательно для собственника и администраторов лаборатории</label>
+        <div class="set-note">${lvl.currentLevel === 'aal2' ? 'Без кода из приложения администраторы не увидят данных — проверяет сервер. Перед включением убедитесь, что администраторы подключили 2FA.' : 'Чтобы включить обязательную 2FA, сначала подключите её себе и войдите заново с кодом.'}</div>` : ''}
+      <div class="set-note">Код меняется каждые 30 секунд в приложении-аутентификаторе: Яндекс Ключ, Google Authenticator, 1Password и др.</div>`;
+  }
+
+  // ── РЕЗЕРВНАЯ КОПИЯ ─────────────────────────────────────────────────────────
+  const BACKUP_TABLES = ['clinics', 'profiles', 'orders', 'order_prices', 'order_comments', 'order_files', 'order_events', 'invites', 'settings', 'tech_rates', 'clinic_pricing', 'documents', 'payments', 'tech_payouts', 'order_templates'];
+  window.CLOUD_UI.backup = async function () {
+    showToast('Готовлю резервную копию…', 'Это может занять до минуты');
+    const out = { app: 'OWNLAB', version: 1, created_at: new Date().toISOString(), project: CFG.url, tables: {} };
+    try {
+      for (const t of BACKUP_TABLES) {
+        const rows = [];
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await sb.from(t).select('*').range(from, from + 999);
+          if (error) throw new Error(t + ': ' + error.message);
+          rows.push(...data); if (data.length < 1000) break;
+        }
+        out.tables[t] = rows;
+      }
+      const blob = new Blob([JSON.stringify(out)], { type: 'application/json' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ownlab-backup-' + new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-') + '.json'; a.click();
+      const n = Object.values(out.tables).reduce((x, r) => x + r.length, 0);
+      showToast('Резервная копия скачана', n + ' записей · ' + Math.round(blob.size / 1024) + ' КБ');
+    } catch (e) { err('Копия не создана', e); }
+  };
 
   // ── ЗАГРУЗКА ДАННЫХ ─────────────────────────────────────────────────────────
   async function loadAll() {
@@ -566,13 +659,16 @@
         ${role() === 'tech' ? `<div class="set-row"><label>Ставка</label><span>${TECH_RATES[ME.id] ?? SETTINGS.techPercent ?? 0}% от суммы выполненной работы</span></div>` : ''}
         <div class="set-row"><label></label><button class="set-btn" onclick="saveProfile()">Сохранить</button><button class="set-btn sec" onclick="CLOUD_UI.changePassword()">Сменить пароль</button><button class="set-btn sec" onclick="CLOUD_UI.logout()">Выйти</button></div>
       </div>
+      <div class="p-card" id="sec-card"><div class="p-card-ttl">🔐 Безопасность входа</div><div class="set-note">Загрузка…</div></div>
       ${tgCard()}
       ${role() === 'owner' ? sellerCard() : ''}${isStaff() ? priceCard() + payCard() : ''}
       <div class="p-card"><div class="p-card-ttl">Данные</div>
         <div class="set-row"><button class="set-btn sec" onclick="exportCSV()">⬇️ Экспорт заказов в CSV</button>
-        ${role() === 'owner' ? '<button class="set-btn sec" onclick="CLOUD_UI.seedDemo()">Загрузить демо-заказы</button>' : ''}</div>
+        ${role() === 'owner' ? '<button class="set-btn sec" onclick="CLOUD_UI.backup()">💾 Резервная копия (JSON)</button><button class="set-btn sec" onclick="CLOUD_UI.seedDemo()">Загрузить демо-заказы</button>' : ''}</div>
+        ${role() === 'owner' ? '<div class="set-note">Резервная копия — все записи базы в одном файле (заказы, клиники, пользователи, цены, документы, оплаты). Сами файлы сканов и фото в копию не входят. Делайте копию хотя бы раз в неделю и храните её вне компьютера.</div>' : ''}
         <div class="set-note">${role() === 'owner' ? 'Демо-заказы — 42 вымышленных заказа, чтобы проверить отчёты. Удалить их можно в карточке заказа.' : 'В выгрузку попадают только заказы, которые вам доступны.'}</div>
       </div>`;
+    secCard();
   };
   window.CLOUD_UI.changePassword = async function () {
     const p = prompt('Новый пароль (от 8 символов):'); if (!p) return;
