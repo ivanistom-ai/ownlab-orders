@@ -181,7 +181,8 @@ begin
       new.doctor_id := old.doctor_id;
     end if;
     -- Техник и клиника не меняют поля заказа после того, как лаборатория его приняла
-    if not public.is_staff() and (public.my_role() = 'tech' or old.stage > 2) then
+    if not public.is_staff() and (public.my_role() = 'tech' or old.stage > 2)
+       and coalesce(current_setting('ownlab.trusted', true), '') <> 'on' then
       if new.data is distinct from old.data then
         raise exception 'Изменить заказ после принятия лабораторией может только лаборатория — напишите в чат заказа';
       end if;
@@ -569,7 +570,7 @@ create table if not exists public.order_events (
 );
 create index if not exists order_events_order_idx on public.order_events(order_id, created_at);
 alter table public.order_events drop constraint if exists order_events_kind_check;
-alter table public.order_events add constraint order_events_kind_check check (kind in ('created','stage','tech','edit','cancel','restore','remake'));
+alter table public.order_events add constraint order_events_kind_check check (kind in ('created','stage','tech','edit','cancel','restore','remake','return'));
 alter table public.order_events enable row level security;
 drop policy if exists events_select on public.order_events;
 create policy events_select on public.order_events for select to authenticated using (public.can_see_order(order_id));
@@ -609,7 +610,7 @@ begin
     if new.data is distinct from old.data then
       select string_agg(key, ',' order by key) into t from (
         select coalesce(n.key, o.key) key from jsonb_each(new.data) n full join jsonb_each(old.data) o on o.key = n.key
-        where n.value is distinct from o.value) x where key not in ('tech', 'doctor', 'clinic');
+        where n.value is distinct from o.value) x where key not in ('tech', 'doctor', 'clinic', 'corrections', 'lastCorrection');
       if t is not null then
         insert into public.order_events(order_id, kind, info, actor_id, actor_name, actor_role)
         values (new.id, 'edit', t, a.id, coalesce(a.full_name, ''), coalesce(a.role, ''));
@@ -692,6 +693,8 @@ declare o public.orders; head text; stages text[] := array['Заказ созд�
   'Цифровое моделирование (CAD)','Согласование дизайна','Производство','Индивидуальная работа техника','Контроль качества',
   'Работа готова','Передана в доставку','В пути','Получена клиникой','Заказ завершён'];
 begin
+  -- смену этапа при возврате на коррекцию не дублируем: придёт одно уведомление «возвращена на коррекцию»
+  if new.kind in ('stage', 'edit') and coalesce(current_setting('ownlab.trusted', true), '') = 'on' then return null; end if;
   select * into o from public.orders where id = new.order_id;
   head := o.num || ' · ' || coalesce(o.data->>'patient', '') || E'\n' || coalesce(o.data->>'type', '');
   if new.kind = 'created' then
@@ -700,6 +703,9 @@ begin
   elsif new.kind = 'cancel' then
     perform public.enqueue(array_remove(array[o.tech_id], null) || public.clinic_side_ids(o) || public.staff_ids(),
       '❌ Заказ отменён: ' || head || coalesce(E'\nПричина: ' || nullif(new.info, ''), ''), new.actor_id);
+  elsif new.kind = 'return' then
+    perform public.enqueue(array_remove(array[o.tech_id], null) || public.staff_ids() || public.clinic_side_ids(o),
+      '↩ Работа возвращена на коррекцию: ' || head || coalesce(E'\nПричина: ' || nullif(new.info, ''), ''), new.actor_id);
   elsif new.kind = 'edit' and o.tech_id is not null then
     perform public.enqueue(array[o.tech_id], '✏️ Изменён заказ ' || head, new.actor_id);
   elsif new.kind = 'tech' and o.tech_id is not null then
@@ -910,6 +916,36 @@ begin
 end $$;
 revoke all on function public.set_require_mfa(boolean) from public, anon;
 grant execute on function public.set_require_mfa(boolean), public.security_status() to authenticated;
+
+-- ══ ВОЗВРАТ НА КОРРЕКЦИЮ ════════════════════════════════════════════════════
+-- Работа отправлена (этапы 11–12) или получена клиникой (13), но не подошла — клиника или лаборатория
+-- возвращает её в лабораторию. Клиника всегда возвращает на этап 8 «Индивидуальная работа техника»,
+-- лаборатория может выбрать этап 3–10. Начисление и зарплата за работу снимаются до повторной сдачи.
+create or replace function public.return_for_correction(p_order uuid, p_reason text, p_stage int, p_dl text)
+returns void language plpgsql security definer set search_path = public as $$
+declare o public.orders; r text := public.my_role(); a public.profiles; target int;
+begin
+  select * into o from public.orders where id = p_order for update;
+  if o.id is null or not public.can_see_order(p_order) then raise exception 'Заказ не найден'; end if;
+  if r not in ('owner','lab_admin','clinic_admin','doctor') then raise exception 'Вернуть работу может клиника или лаборатория'; end if;
+  if o.cancelled_at is not null then raise exception 'Заказ отменён'; end if;
+  if o.stage not between 11 and 13 then raise exception 'Вернуть на коррекцию можно после отправки работы в клинику'; end if;
+  if coalesce(trim(p_reason), '') = '' then raise exception 'Укажите причину'; end if;
+  target := case when public.is_staff() then coalesce(p_stage, 8) else 8 end;
+  if target not between 3 and 10 then raise exception 'Недопустимый этап'; end if;
+  select * into a from public.profiles where id = auth.uid();
+  perform set_config('ownlab.trusted', 'on', true);
+  update public.orders set stage = target,
+    data = data || jsonb_build_object('corrections', coalesce((data->>'corrections')::int, 0) + 1,
+                                      'lastCorrection', jsonb_build_object('reason', trim(p_reason), 'at', now(), 'by', coalesce(a.full_name, '')))
+                || case when coalesce(p_dl, '') <> '' then jsonb_build_object('dl', p_dl) else '{}'::jsonb end
+  where id = p_order;
+  perform set_config('ownlab.trusted', 'off', true);
+  insert into public.order_events(order_id, kind, from_stage, to_stage, info, actor_id, actor_name, actor_role)
+  values (p_order, 'return', o.stage, target, trim(p_reason), a.id, coalesce(a.full_name, ''), coalesce(a.role, ''));
+end $$;
+revoke all on function public.return_for_correction(uuid, text, int, text) from public, anon;
+grant execute on function public.return_for_correction(uuid, text, int, text) to authenticated;
 
 -- ── ДОЗАПОЛНЕНИЕ ДЛЯ УЖЕ СОЗДАННЫХ ЗАКАЗОВ ──────────────────────────────────
 alter table public.orders disable trigger orders_guard;
