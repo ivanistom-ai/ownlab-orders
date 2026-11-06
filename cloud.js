@@ -1016,10 +1016,9 @@
         </tbody></table></div><div class="p-card-ttl" style="margin-top:12px">История выплат</div>${hist(PAYOUTS)}`;
     } else {
       const a = acc[ME.id] || 0, p = paid[ME.id] || 0;
-      card.innerHTML = `<div class="p-card-ttl">💸 Мои выплаты</div><div class="kpi-row" style="margin-bottom:8px">
-        <div class="kpi"><div class="kn">${rub(a)}</div><div class="kl">Начислено всего</div></div>
-        <div class="kpi"><div class="kn" style="color:var(--green)">${rub(p)}</div><div class="kl">Выплачено</div></div>
-        <div class="kpi"><div class="kn" style="color:var(--org)">${rub(a - p)}</div><div class="kl">Остаток к выплате</div></div></div>${hist(PAYOUTS)}`;
+      if ($('tp-rest')) $('tp-rest').textContent = rub(a - p);
+      if ($('tp-paid')) $('tp-paid').textContent = rub(p);
+      card.innerHTML = `<div class="p-card-ttl">💸 Мои выплаты · начислено за всё время ${rub(a)}, выплачено ${rub(p)}, остаток ${rub(a - p)}</div>${hist(PAYOUTS)}`;
     }
     $('view-pay').appendChild(card);
   };

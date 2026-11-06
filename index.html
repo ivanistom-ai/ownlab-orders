@@ -62,7 +62,7 @@ button,input,select,textarea{font-family:var(--font)}
 .sb-stat .sk{color:var(--t4)}.sb-stat .sv{font-family:var(--mono);font-weight:600}
 
 /* MAIN */
-.main{overflow-y:auto;background:var(--bg);display:flex;flex-direction:column}
+.main{flex:1;min-width:0;overflow-y:auto;background:var(--bg);display:flex;flex-direction:column}
 .topbar{padding:18px 24px 0;display:flex;align-items:center;gap:14px;flex-shrink:0}
 .search-wrap{flex:1;max-width:400px;position:relative}
 .search-wrap input{width:100%;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px 10px 38px;color:var(--t1);font-size:12px;outline:none;transition:border-color .2s;box-shadow:0 1px 3px rgba(0,0,0,.05)}
@@ -360,6 +360,24 @@ button,input,select,textarea{font-family:var(--font)}
 .file-3d{position:absolute;top:4px;right:4px;background:var(--org);color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px}
 .tpl-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}.tpl-bar .form-select{flex:1;min-width:180px}
 @media (max-width:820px){.mv-wrap{padding:0}.mv-box,.lb-box{border-radius:0}.lb-stage img{max-width:100%}.lb-nav{position:absolute;z-index:2}.lb-nav:first-child{left:4px}.lb-nav:last-child{right:4px}.lb-stage{position:relative}}
+.tp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}.tp-btns{display:flex;gap:8px}
+.tp-periods{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 14px}
+.tp-chip{border:1px solid var(--border);background:var(--card);border-radius:16px;padding:6px 12px;font-size:11px;font-weight:600;color:var(--t2);cursor:pointer}
+.tp-chip.on{background:var(--org);border-color:var(--org);color:#fff}
+.tp-dates{display:flex;align-items:center;gap:6px;margin-left:auto}.tp-dates .set-input{min-width:0;width:140px;flex:none}
+.tp-hero{display:flex;gap:16px;background:linear-gradient(135deg,var(--org),#f08a4b);color:#fff;border-radius:12px;padding:18px 20px;margin-bottom:12px;flex-wrap:wrap}
+.tp-main{flex:1;min-width:220px}.tp-cap{font-size:11px;opacity:.85;text-transform:uppercase;letter-spacing:.06em}
+.tp-sum{font-size:34px;font-weight:800;font-family:var(--mono);line-height:1.15;margin:4px 0}.tp-meta{font-size:12px;opacity:.9}
+.tp-side{display:flex;gap:22px;align-items:flex-end;background:rgba(255,255,255,.14);border-radius:10px;padding:12px 16px}
+.tp-rest,.tp-paid{font-size:20px;font-weight:700;font-family:var(--mono)}
+.tp-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:12px}
+.tp-active{display:flex;flex-direction:column}
+.tp-act{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px}
+.tp-act:hover{background:var(--card2)}.tp-num{font-family:var(--mono);font-size:10px;color:var(--org)}
+.tp-pat{overflow:hidden}.tp-pat b,.tp-pat small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tp-pat .tp-st{color:var(--t3)}.tp-pat small,.tp-dl small{display:block;color:var(--t4);font-size:10px}
+.tp-dl{text-align:right;font-family:var(--mono);font-size:11px}.tp-dl.over{color:var(--red)}.tp-dl.soon{color:var(--org)}
+.tp-listhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}.tp-search{flex:0 1 300px;min-width:180px}
+@media (max-width:820px){.tp-grid{grid-template-columns:1fr}.tp-dates{margin-left:0}.tp-sum{font-size:28px}.tp-side{width:100%;justify-content:space-between}}
 .r-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px 12px;margin-bottom:12px}
 .r-grid label{display:flex;flex-direction:column;gap:4px;font-size:10px;color:var(--t3);font-weight:600}
 .r-grid .set-input{min-width:0;width:100%}
@@ -1804,6 +1822,7 @@ async function renderPay(){
   const S=k=>list.reduce((s,r)=>s+(+r[k]||0),0), sum=S('amount'), pay=S('pay'), units=S('units');
   const sel=(k,opts,all)=>`<select class="set-input" onchange="setPay('${k}',this.value)">${all?`<option value="">${all}</option>`:''}${opts.map(([v,l])=>`<option value="${esc(v)}"${PAY[k]===v?' selected':''}>${esc(l)}</option>`).join('')}</select>`;
   const period=(PAY.from?ruDate(fromIso(PAY.from)):'…')+' — '+(PAY.to?ruDate(fromIso(PAY.to)):'…');
+  if(mode!=='staff'){el.innerHTML=myPayPage(list,period);return;}
   const params=`<div class="p-card"><div class="p-card-ttl">Период</div><div class="r-grid">
       <label>Период${sel('preset',Object.entries(PRESETS))}</label>
       <label>С даты<input type="date" class="set-input" value="${PAY.from}" onchange="setPay('from',this.value)"></label>
@@ -1848,6 +1867,46 @@ async function renderPay(){
   el.innerHTML=`<div class="page-ttl">💰 ${mode==='staff'?'Зарплата техников':'Мой заработок'}</div>
     <div class="page-sub">Работа считается выполненной, когда клиника её получила (этап 13). ${mode==='staff'?'Нажмите на техника, чтобы увидеть его работы.':''}</div>${params}${body}`;
 }
+// Страница техника «Мой заработок»
+function myPayPage(list,period){
+  const q=norm((PAY.q||'').trim()), shown=list.filter(r=>!q||norm([r.num,r.patient,r.work].join(' ')).includes(q));
+  const pay=list.reduce((s,r)=>s+r.pay,0), units=list.reduce((s,r)=>s+r.units,0);
+  const rate=list[0]?.percent??techRate(window.CLOUD_API?.me?.id)??SETTINGS.techPercent??0;
+  const active=ORDERS.filter(isActive).map(o=>[o,daysLeft(o)]).sort((a,b)=>(a[1]??1e9)-(b[1]??1e9));
+  const over=active.filter(([,d])=>d!==null&&d<0).length;
+  const byM={}; list.forEach(r=>{const k=iso(r.done).slice(0,7);byM[k]=(byM[k]||0)+r.pay;});
+  const months=Object.entries(byM).sort(), mmax=Math.max(1,...months.map(m=>m[1]));
+  const chips=['month','prev','quarter','ytd','12m','all'].map(k=>`<button class="tp-chip${PAY.preset===k?' on':''}" onclick="setPay('preset','${k}')">${PRESETS[k]}</button>`).join('');
+  const label=PAY.preset==='custom'?period:PRESETS[PAY.preset].toLowerCase();
+  const cls=d=>d===null?'':d<0?'over':d<=1?'soon':'';
+  return `<div class="tp-head"><div><div class="page-ttl">💰 Мой заработок</div>
+      <div class="page-sub">Начисления за выполненные работы. Работа считается выполненной, когда клиника её получила.</div></div>
+      <div class="tp-btns"><button class="set-btn sec" onclick="exportPayCSV()">⬇️ Excel</button><button class="set-btn sec" onclick="printPay()">🖨 Печать</button></div></div>
+    <div class="tp-periods">${chips}<span class="tp-dates"><input type="date" class="set-input" value="${PAY.from}" onchange="setPay('from',this.value)" title="С даты"> — <input type="date" class="set-input" value="${PAY.to}" onchange="setPay('to',this.value)" title="По дату"></span></div>
+    <div class="tp-hero">
+      <div class="tp-main"><div class="tp-cap">Заработано · ${esc(label)}</div><div class="tp-sum">${rub(pay)}</div>
+        <div class="tp-meta">${list.length} ${plural(list.length,'работа','работы','работ')} · ${units} ед. · ставка ${rate}% от суммы работы</div></div>
+      <div class="tp-side"><div><div class="tp-cap">К выплате</div><div class="tp-rest" id="tp-rest">—</div></div><div><div class="tp-cap">Выплачено всего</div><div class="tp-paid" id="tp-paid">—</div></div></div>
+    </div>
+    <div class="kpi-row">
+      <div class="kpi"><div class="kn">${list.length}</div><div class="kl">Выполнено работ</div></div>
+      <div class="kpi"><div class="kn">${units}</div><div class="kl">Единиц</div></div>
+      <div class="kpi"><div class="kn">${rub(list.length?pay/list.length:0)}</div><div class="kl">В среднем за работу</div></div>
+      <div class="kpi"><div class="kn" style="color:var(--org)">${active.length}</div><div class="kl">Сейчас в работе</div></div>
+      <div class="kpi"><div class="kn" style="color:${over?'var(--red)':'var(--green)'}">${over}</div><div class="kl">Просрочено</div></div>
+    </div>
+    <div class="tp-grid">
+      <div class="p-card"><div class="p-card-ttl">📈 По месяцам</div>${months.length?months.map(([k,v])=>`<div class="bar-row"><span class="bar-lbl">${esc(monthLabel(k))}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/mmax*100)}%"></div></div><span class="bar-val">${rub(v)}</span></div>`).join(''):'<div class="pop-empty">Нет выполненных работ за период</div>'}</div>
+      <div class="p-card"><div class="p-card-ttl">🛠 Сейчас в работе · ${active.length}</div>${active.length?`<div class="tp-active">${active.slice(0,12).map(([o,d])=>`<div class="tp-act" onclick="openDetail('${o.id}')"><span class="tp-num">${esc(o.num)}</span><span class="tp-pat">${o.urgent?'⚡ ':''}<b>${esc(o.patient)}</b><small>${esc(o.type||'')}</small><small class="tp-st">${STAGES[o.stage-1].e} Этап ${o.stage}: ${esc(STAGES[o.stage-1].n)}</small></span><span class="tp-dl ${cls(d)}">${esc(o.dl)}<small>${leftTxt(d)}</small></span></div>`).join('')}</div>${active.length>12?`<div class="set-note">Ещё ${active.length-12} — во вкладке «Заказы»</div>`:''}`:'<div class="pop-empty">Активных заказов нет</div>'}</div>
+    </div>
+    <div class="p-card"><div class="tp-listhead"><div class="p-card-ttl" style="margin:0">✅ Выполненные работы · ${period}</div>
+      <input class="set-input tp-search" placeholder="🔍 Поиск: заказ, пациент, работа" value="${esc(PAY.q||'')}" oninput="PAY.q=this.value;clearTimeout(PAY.t);PAY.t=setTimeout(()=>{renderPay().then(()=>{const i=document.querySelector('.tp-search');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}})},250)"></div>
+      ${shown.length?`<div style="overflow-x:auto"><table class="rep tp-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Пациент</th><th>Работа</th><th class="n">Ед.</th><th class="n">Ставка</th><th class="n">Начислено</th></tr></thead>
+        <tbody>${shown.map(r=>`<tr${r.id?` class="rep-g" onclick="openDetail('${r.id}')"`:''}><td>${ruDate(r.done)}</td><td><span class="u-link">${esc(r.num)}</span></td><td>${esc(r.patient||'')}</td><td>${esc(r.work||'')}</td><td class="n">${r.units}</td><td class="n">${r.percent}%</td><td class="n"><b>${rub(r.pay)}</b></td></tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="4">Итого${q?' (найдено '+shown.length+')':''}</td><td class="n">${shown.reduce((s,r)=>s+r.units,0)}</td><td></td><td class="n">${rub(shown.reduce((s,r)=>s+r.pay,0))}</td></tr></tfoot></table></div>`
+        :`<div class="pop-empty">${q?'Ничего не найдено':'За выбранный период выполненных работ нет. Выберите другой период выше.'}</div>`}</div>`;
+}
+function plural(n,a,b,c){n=Math.abs(n)%100;const m=n%10;return n>10&&n<20?c:m>1&&m<5?b:m===1?a:c;}
 function payExportRows(){
   const staff=payMode()==='staff', list=payCache.filter(r=>!PAY.tech||r.tech===PAY.tech);
   const head=['Дата выполнения','Техник','Номер','Пациент','Работа','Единиц'].concat(staff?['Сумма работы']:[],['Ставка, %','Начислено']);
@@ -2275,7 +2334,7 @@ renderOrders();
 if(!window.OWNLAB_CONFIG?.url&&new URLSearchParams(location.search).get('order'))setTimeout(()=>openDetail(new URLSearchParams(location.search).get('order')));
 else if(innerWidth>820){openDetail('o1');switchTab('timeline', document.querySelectorAll('.det-tab')[1]);}
 </script>
-<script src="config.js?v=12"></script>
-<script src="cloud.js?v=12"></script>
+<script src="config.js?v=13"></script>
+<script src="cloud.js?v=13"></script>
 </body>
 </html>
