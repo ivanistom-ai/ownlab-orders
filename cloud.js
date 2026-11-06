@@ -519,6 +519,7 @@
     if (e.kind === 'cancel') return '❌ Заказ отменён' + (e.info ? ': ' + e.info : '');
     if (e.kind === 'restore') return '↺ Заказ возвращён в работу';
     if (e.kind === 'remake') return '🔁 Создана переделка ' + e.info;
+    if (e.kind === 'return') return '↩ Возвращена на коррекцию (этап ' + e.from_stage + ' → ' + e.to_stage + '): ' + e.info;
     if (e.kind === 'created') return 'Заказ создан' + (e.to_stage > 1 ? ' на этапе ' + e.to_stage : '');
     if (e.kind === 'tech') return e.info === 'снят' ? 'Техник снят с заказа' : 'Назначен техник: ' + e.info;
     return (e.to_stage < e.from_stage ? '↩ Возврат на этап ' : 'Этап ') + e.to_stage + ': ' + STAGES[e.to_stage - 1].n;
@@ -556,7 +557,7 @@
   };
 
   // ── ЗАПИСЬ ИЗМЕНЕНИЙ ────────────────────────────────────────────────────────
-  const DATA_KEYS = ['patient', 'clinic', 'doctor', 'tech', 'type', 'units', 'shade', 'material', 'teeth', 'dl', 'cr', 'svc', 'urgent', 'priority', 'notes', 'trackNum', 'trackSt', 'needsData', 'remakeOf', 'remakeReason', 'remakeBy', 'lot'];
+  const DATA_KEYS = ['patient', 'clinic', 'doctor', 'tech', 'type', 'units', 'shade', 'material', 'teeth', 'dl', 'cr', 'svc', 'urgent', 'priority', 'notes', 'trackNum', 'trackSt', 'needsData', 'remakeOf', 'remakeReason', 'remakeBy', 'lot', 'corrections', 'lastCorrection'];
   const pickData = o => Object.fromEntries(DATA_KEYS.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 
   window.doAction = async function (action, id) {
@@ -747,6 +748,15 @@
   window.canEdit = o => !o.cancelled && (isStaff() || clinicEditable(o));
   window.canCancel = o => isStaff() || clinicEditable(o);
   window.canRemake = o => isStaff() && !o.cancelled;
+  window.canReturn = o => !o.cancelled && o.stage >= 11 && o.stage <= 13 && (isStaff() || isClinic());
+  window.canChooseReturnStage = () => isStaff();
+  window.doReturn = async function (id) {
+    const o = ORDERS.find(x => x.id === id), r = returnValues(); if (!o || !r) return;
+    try {
+      await q(sb.rpc('return_for_correction', { p_order: id, p_reason: r.reason, p_stage: isStaff() ? r.stage : null, p_dl: r.dl || null }));
+      closeDoc(); showToast('Работа возвращена на коррекцию', o.num + (o.tech && o.tech !== '—' ? ' · технику придёт уведомление' : '')); reload(0);
+    } catch (e) { err('Не удалось вернуть', e); }
+  };
   window.saveOrderEdit = async function (id) {
     const o = ORDERS.find(x => x.id === id), p = editValues(); if (!o || !p) return;
     try {

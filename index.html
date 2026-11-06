@@ -798,7 +798,7 @@ function renderOrders(){
       </div>
       <div class="c-bot">
         <span class="c-clinic">🏥 ${esc(o.clinic)} · ${esc(o.tech)}</span>
-        <span class="status-badge ${SBADGE[o.color]}">${o.cancelled?'❌ Отменён':st.e+' '+st.n}</span>${o.remakeOf?'<span class="status-badge sb-cancel" title="Переделка">🔁</span>':''}
+        <span class="status-badge ${SBADGE[o.color]}">${o.cancelled?'❌ Отменён':st.e+' '+st.n}</span>${o.remakeOf?'<span class="status-badge sb-cancel" title="Переделка">🔁</span>':''}${+o.corrections?`<span class="status-badge sb-cancel" title="Возвращалась на коррекцию">↩ ${+o.corrections}</span>`:''}
       </div>
       <div class="progress-bar"><div class="progress-fill" style="width:${o.prog}%"></div></div>
     </div>`;
@@ -857,6 +857,7 @@ function renderTL(o){
       else if(st.tracking){acts=`<div class="tracking-box"><div style="font-size:10px;color:var(--t3)">Трек-номер:</div><div class="tracking-num">${o.trackNum||'—'}</div><div class="tracking-status-txt">${o.trackSt||''}</div></div><div class="tl-actions"><button class="tl-btn success" onclick="doAction('received','${o.id}')">✅ Клиника получила</button><button class="tl-btn purple-btn" onclick="doAction('track','${o.id}')">🔍 Отследить</button></div>`;}
       else if(n<13){acts=`<div class="tl-actions"><button class="tl-btn primary" onclick="doAction('next','${o.id}')">Следующий этап →</button><button class="tl-btn sec" onclick="doAction('photo','${o.id}')">📸 Добавить фото</button></div>`;}
     }
+    if(isAct&&canReturn(o))acts+=`<div class="tl-actions"><button class="tl-btn warn-btn" onclick="openReturn('${o.id}')">↩ Не подошло — вернуть на коррекцию</button></div>`;
     const desc=!isPend?`<div class="tl-desc${isAct?' active':''}">${st.d}</div>`:'';
     h+=`<div class="tl-item"><div class="tl-left"><div class="tl-dot ${dc}" style="font-size:${isDone?'13px':'10px'}">${dotTxt}</div>${!isLast?`<div class="tl-line ${lc}"></div>`:''}</div><div class="tl-content"><div class="tl-row"><div class="tl-name ${nc}">${st.n}</div>${badge}${ts}</div>${desc}${subs}${acts}</div></div>`;
   });
@@ -1874,10 +1875,13 @@ function orderActs(o){
   if(!o.cancelled)b.push(`<button class="set-btn sec" onclick="printPassport('${o.id}')">📜 Паспорт и гарантия</button>`);
   if(canCreate())b.push(`<button class="set-btn sec" onclick="repeatOrder('${o.id}')">↻ Повторить</button>`);
   if(canEdit(o))b.push(`<button class="set-btn sec" onclick="openEditOrder('${o.id}')">✏️ Изменить</button>`);
+  if(canReturn(o))b.push(`<button class="set-btn sec" onclick="openReturn('${o.id}')">↩ На коррекцию</button>`);
   if(canRemake(o))b.push(`<button class="set-btn sec" onclick="openRemake('${o.id}')">🔁 Переделка</button>`);
   if(canCancel(o))b.push(o.cancelled?`<button class="set-btn sec" onclick="restoreOrder('${o.id}')">↺ Вернуть в работу</button>`:`<button class="set-btn danger" onclick="cancelOrder('${o.id}')">Отменить заказ</button>`);
   const rm=o.remakeOf?ORDERS.find(x=>x.id===o.remakeOf):null, kids=ORDERS.filter(x=>x.remakeOf===o.id);
-  return `${o.cancelled?`<div class="doc-warn">❌ Заказ отменён${o.cancelReason?': '+esc(o.cancelReason):''}</div>`:''}
+  const lc=o.lastCorrection;
+  return `${+o.corrections&&lc?`<div class="doc-warn">↩ Возвращалась на коррекцию: ${+o.corrections} раз(а). Последняя причина: ${esc(lc.reason||'—')}${lc.by?' · '+esc(lc.by):''}${lc.at?' · '+new Date(lc.at).toLocaleDateString('ru-RU'):''}</div>`:''}
+    ${o.cancelled?`<div class="doc-warn">❌ Заказ отменён${o.cancelReason?': '+esc(o.cancelReason):''}</div>`:''}
     ${o.remakeOf?`<div class="doc-warn" style="background:var(--org-d)">🔁 Переделка${rm?` заказа <a href="#" onclick="openDetail('${rm.id}');return false">${esc(rm.num)}</a>`:''}${o.remakeReason?' · '+esc(o.remakeReason):''} · ${o.remakeBy==='clinic'?'за счёт клиники':'за счёт лаборатории'}</div>`:''}
     ${kids.length?`<div class="set-note" style="margin:0 0 8px">Переделки: ${kids.map(k=>`<a href="#" onclick="openDetail('${k.id}');return false">${esc(k.num)}</a>`).join(', ')}</div>`:''}
     <div class="set-row ord-acts">${b.join('')}</div>`;
@@ -1945,14 +1949,53 @@ async function createRemake(id){
   const n=Object.assign({},o,{id:'o'+Date.now(),num,stage:1,prog:4,color:'green',cr:dIn(0),dl:r.dl,files:[],comments:[],remakeOf:o.id,remakeReason:r.reason,remakeBy:r.by,price:r.by==='lab'?0:o.price,cancelled:false,doneAt:''});
   ORDERS.unshift(n); closeDoc(); renderOrders(); openDetail(n.id); showToast('Переделка создана',num+' · '+r.reason);
 }
+// ── ВОЗВРАТ НА КОРРЕКЦИЮ ─────────────────────────────────────────────────────
+// Работа отправлена (этапы 11–12) или получена клиникой (13), но не подошла
+const CORR_REASONS=['Не подошло по посадке','Контакты с соседними зубами','Окклюзия (высота, контакты с антагонистами)','Цвет','Форма / эстетика','Давит на десну','Другое'];
+const CORR_STAGES=[3,4,5,7,8,9,10];
+function canReturn(o){return !o.cancelled&&o.stage>=11&&o.stage<=13;}
+function canChooseReturnStage(){return true;}       // cloud.js: только лаборатория выбирает этап
+function openReturn(id){
+  const o=ORDERS.find(x=>x.id===id); if(!o)return;
+  const d=addWorkdays(new Date(),3);
+  document.getElementById('docModal').innerHTML=`
+    <div class="modal-title">↩ Вернуть на коррекцию ${esc(o.num)}</div>
+    <div class="modal-sub">${esc(o.patient)} · ${esc(o.type)} · сейчас: ${esc(STAGES[o.stage-1].n)}</div>
+    <div class="form-group"><label class="form-label">Что не так</label><select class="form-select" id="cr-reason">${CORR_REASONS.map(r=>`<option>${esc(r)}</option>`).join('')}</select></div>
+    <div class="form-group"><label class="form-label">Подробности для техника *</label><textarea class="form-textarea" id="cr-note" placeholder="Например: завышает прикус на 46, нет контакта с 45"></textarea></div>
+    <div class="form-row">
+      ${canChooseReturnStage()?`<div class="form-group"><label class="form-label">Вернуть на этап</label><select class="form-select" id="cr-stage">${CORR_STAGES.map(n=>`<option value="${n}"${n===8?' selected':''}>${n}. ${esc(STAGES[n-1].n)}</option>`).join('')}</select></div>`:''}
+      <div class="form-group"><label class="form-label">Новый срок</label><input class="form-input" id="cr-dl" type="date" value="${iso(d)}"></div>
+    </div>
+    <div class="set-note">Работа вернётся в лабораторию${canChooseReturnStage()?'':' на этап «Индивидуальная работа техника»'}. До повторной сдачи она не входит в начисления клинике и зарплату техника. Это не переделка: заказ тот же, номер не меняется. Фото проблемы можно приложить во вкладке «Файлы».</div>
+    <div class="modal-actions"><button class="modal-btn cancel" onclick="closeDoc()">Отмена</button><button class="modal-btn primary" onclick="doReturn('${o.id}')">Вернуть на коррекцию</button></div>`;
+  document.getElementById('docOverlay').classList.add('open');
+  document.getElementById('cr-note').focus();
+}
+function returnValues(){
+  const v=id=>document.getElementById(id)?.value.trim()||'';
+  if(!v('cr-note')){showToast('Опишите, что исправить','Это поле увидит техник','error');document.getElementById('cr-note').focus();return null;}
+  return{reason:v('cr-reason')+': '+v('cr-note'),stage:+v('cr-stage')||8,dl:v('cr-dl')?iso2dmy(v('cr-dl')):''};
+}
+async function doReturn(id){
+  const o=ORDERS.find(x=>x.id===id), r=returnValues(); if(!o||!r)return;
+  Object.assign(o,{stage:r.stage,color:STAGES[r.stage-1].c,prog:Math.round(r.stage/14*100),corrections:(+o.corrections||0)+1,lastCorrection:{reason:r.reason,at:new Date().toISOString(),by:SETTINGS.name},doneAt:''});
+  if(r.dl)o.dl=r.dl;
+  (o.comments=o.comments||[]).push({av:SETTINGS.initials,rc:'admin',au:SETTINGS.name,role:SETTINGS.role,t:'↩ Возврат на коррекцию: '+r.reason,time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})});
+  closeDoc(); renderOrders(); openDetail(id); showToast('Работа возвращена на коррекцию',o.num+' · этап '+r.stage);
+}
 function remakeCard(list){
-  const rm=list.filter(o=>o.remakeOf), base=list.filter(o=>!o.remakeOf).length;
-  if(!rm.length)return'';
+  const rm=list.filter(o=>o.remakeOf), base=list.filter(o=>!o.remakeOf).length, cr=list.filter(o=>+o.corrections);
+  if(!rm.length&&!cr.length)return'';
+  const crN=cr.reduce((s,o)=>s+(+o.corrections),0), crR=countBy(cr,o=>(o.lastCorrection?.reason||'—').split(':')[0]), crT=countBy(cr,o=>o.tech);
+  const crHtml=cr.length?`<div class="p-card"><div class="p-card-ttl">↩ Коррекции после отправки · ${cr.length} заказ(ов), возвратов ${crN} · ${list.length?(cr.length/list.length*100).toFixed(1):0}% работ</div>
+    <div class="p-grid"><div><div class="set-note">Причины (последний возврат)</div>${bars(crR,Math.max(1,...crR.map(r=>r[1])),'searchFor')}</div><div><div class="set-note">По техникам</div>${bars(crT,Math.max(1,...crT.map(r=>r[1])),'filterTech')}</div></div></div>`:'';
+  if(!rm.length)return crHtml;
   const orig=o=>ORDERS.find(x=>x.id===o.remakeOf)||o;
   const by=f=>countBy(rm,f), mx=a=>Math.max(1,...a.map(r=>r[1]));
   const reasons=by(o=>(o.remakeReason||'—').split(':')[0]), techs=by(o=>orig(o).tech), clin=by(o=>o.clinic);
   return `<div class="p-card"><div class="p-card-ttl">🔁 Переделки · ${rm.length} из ${base+rm.length} (${base?(rm.length/base*100).toFixed(1):0}%) · за счёт лаборатории ${rm.filter(o=>o.remakeBy!=='clinic').length}</div>
-    <div class="p-grid"><div><div class="set-note">Причины</div>${bars(reasons,mx(reasons),'searchFor')}</div><div><div class="set-note">По техникам (исходный заказ)</div>${bars(techs,mx(techs),'filterTech')}</div><div><div class="set-note">По клиникам</div>${bars(clin,mx(clin),'searchFor')}</div></div></div>`;
+    <div class="p-grid"><div><div class="set-note">Причины</div>${bars(reasons,mx(reasons),'searchFor')}</div><div><div class="set-note">По техникам (исходный заказ)</div>${bars(techs,mx(techs),'filterTech')}</div><div><div class="set-note">По клиникам</div>${bars(clin,mx(clin),'searchFor')}</div></div></div>`+crHtml;
 }
 
 // ── ПАСПОРТ ИЗДЕЛИЯ И ГАРАНТИЙНЫЙ ТАЛОН ──────────────────────────────────────
@@ -2232,7 +2275,7 @@ renderOrders();
 if(!window.OWNLAB_CONFIG?.url&&new URLSearchParams(location.search).get('order'))setTimeout(()=>openDetail(new URLSearchParams(location.search).get('order')));
 else if(innerWidth>820){openDetail('o1');switchTab('timeline', document.querySelectorAll('.det-tab')[1]);}
 </script>
-<script src="config.js?v=11"></script>
-<script src="cloud.js?v=11"></script>
+<script src="config.js?v=12"></script>
+<script src="cloud.js?v=12"></script>
 </body>
 </html>
