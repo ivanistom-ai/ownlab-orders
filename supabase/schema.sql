@@ -777,6 +777,8 @@ create table if not exists public.documents (
   created_at timestamptz not null default now()
 );
 create index if not exists documents_clinic_idx on public.documents(clinic_id, doc_date);
+alter table public.documents drop constraint if exists documents_kind_check;
+alter table public.documents add constraint documents_kind_check check (kind in ('inv','nak','sf','act','upd'));
 create table if not exists public.payments (
   id uuid primary key default gen_random_uuid(),
   clinic_id uuid not null references public.clinics(id) on delete cascade,
@@ -819,7 +821,7 @@ language sql stable security definer set search_path = public as $$
   union all
   select p.clinic_id, p.paid_at, 'payment',
          'Оплата' || case when p.method <> '' then ' (' || p.method || ')' else '' end
-           || coalesce(' по ' || case d.kind when 'inv' then 'счёту' when 'nak' then 'накладной' else 'счёту-фактуре' end || ' № ' || d.number, '')
+           || coalesce(' по ' || case d.kind when 'inv' then 'счёту' when 'nak' then 'накладной' when 'act' then 'акту' when 'upd' then 'УПД' else 'счёту-фактуре' end || ' № ' || d.number, '')
            || case when p.note <> '' then ' · ' || p.note else '' end,
          0::numeric, p.amount
   from public.payments p left join public.documents d on d.id = p.document_id
