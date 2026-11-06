@@ -1192,7 +1192,7 @@ function renderAnalytics(){
       <div class="r-actions">
         <button class="set-btn sec" onclick="exportReportCSV()">⬇️ Выгрузить в Excel</button>
         <button class="set-btn sec" onclick="printReport()">🖨 Печать / PDF</button>
-        <button class="set-btn" onclick="openDocModal()">🧾 Счёт, накладная, счёт-фактура</button>
+        <button class="set-btn" onclick="openDocModal()">🧾 Счёт, акт, УПД</button>
         <button class="set-btn sec" onclick="resetReport()">Сбросить</button>
       </div>
     </div>
@@ -1292,12 +1292,12 @@ function rubWords(n){
 }
 const VAT_OPTS=[['none','Без НДС'],['5','5%'],['7','7%'],['10','10%'],['20','20%'],['22','22%']];
 function vatRate(){return SETTINGS.vat==='none'?0:+SETTINGS.vat;}
-const DOC={clinic:'',onlyDone:true,patient:true,date:'',inv:'',nak:'',sf:''};
+const DOC={clinic:'',onlyDone:true,patient:true,date:'',inv:'',act:'',upd:'',nak:'',sf:''};
 function docOrders(){return reportOrders().filter(o=>o.clinic===DOC.clinic&&(!DOC.onlyDone||isDone(o)));}
 function openDocModal(){
   const clinics=uniq(reportOrders().map(o=>o.clinic));
   if(!clinics.length){showToast('Нет заказов','В выбранном периоде нет заказов','warning');return;}
-  Object.assign(DOC,{clinic:R.clinic&&clinics.includes(R.clinic)?R.clinic:clinics[0],date:iso(new Date()),inv:String(SETTINGS.docNum.inv||1),nak:String(SETTINGS.docNum.nak||1),sf:String(SETTINGS.docNum.sf||1)});
+  Object.assign(DOC,{clinic:R.clinic&&clinics.includes(R.clinic)?R.clinic:clinics[0],date:iso(new Date()),inv:String(SETTINGS.docNum.inv||1),act:String(SETTINGS.docNum.act||1),upd:String(SETTINGS.docNum.upd||1),nak:String(SETTINGS.docNum.nak||1),sf:String(SETTINGS.docNum.sf||1)});
   renderDocModal(); document.getElementById('docOverlay').classList.add('open');
 }
 function closeDoc(){document.getElementById('docOverlay').classList.remove('open');}
@@ -1305,7 +1305,7 @@ function saveDocFields(){
   const v=id=>document.getElementById(id)?.value.trim()??'';
   if(!document.getElementById('d-inn'))return;
   SETTINGS.buyers[DOC.clinic]={inn:v('d-inn'),kpp:v('d-kpp'),addr:v('d-addr')};
-  Object.assign(DOC,{inv:v('d-inv'),nak:v('d-nak'),sf:v('d-sf'),date:v('d-date')});
+  Object.assign(DOC,{inv:v('d-inv'),act:v('d-act'),upd:v('d-upd'),nak:v('d-nak'),sf:v('d-sf'),date:v('d-date')});
   saveSettings();
 }
 function docSet(k,v){saveDocFields();DOC[k]=v;renderDocModal();}
@@ -1329,17 +1329,24 @@ function renderDocModal(){
       <div class="form-group"><label class="form-label">Дата документов</label><input class="form-input" id="d-date" type="date" value="${DOC.date}"></div>
     </div>
     <div class="form-row">
+      <div class="form-group"><label class="form-label">№ акта</label><input class="form-input" id="d-act" value="${esc(DOC.act)}"></div>
+      <div class="form-group"><label class="form-label">№ УПД</label><input class="form-input" id="d-upd" value="${esc(DOC.upd)}"></div>
+    </div>
+    <div class="form-row">
       <div class="form-group"><label class="form-label">№ накладной</label><input class="form-input" id="d-nak" value="${esc(DOC.nak)}"></div>
       <div class="form-group"><label class="form-label">№ счёт-фактуры</label><input class="form-input" id="d-sf" value="${esc(DOC.sf)}"></div>
     </div>
     <label class="chk"><input type="checkbox"${DOC.onlyDone?' checked':''} onchange="docSet('onlyDone',this.checked)"> Только завершённые заказы</label>
     <label class="chk"><input type="checkbox"${DOC.patient?' checked':''} onchange="docSet('patient',this.checked)"> Указывать пациента в наименовании</label>
+    <div class="set-note">Лаборатория выполняет работы, поэтому обычно выписывают <b>акт выполненных работ</b> или <b>УПД</b> (заменяет накладную и счёт-фактуру). Какой документ нужен — уточните у бухгалтера.</div>
     <div class="doc-sum">Заказов: <b>${items.length}</b> · единиц: <b>${items.reduce((x,o)=>x+(+o.units||0),0)}</b> · сумма: <b>${rub(sum)}</b> · ${r?'в т.ч. НДС '+r+'%: '+rub(sum*r/(100+r)):'без НДС'}</div>
     ${s.inn?'':'<div class="doc-warn">⚠️ Реквизиты лаборатории не заполнены — откройте «Настройки → Реквизиты лаборатории». Пустые поля будут напечатаны прочерками.</div>'}
     ${items.length?'':'<div class="doc-warn">Нет заказов для этой клиники с выбранными условиями.</div>'}
     <div class="modal-actions">
       <button class="modal-btn cancel" onclick="closeDoc()">Закрыть</button>
       <button class="modal-btn primary" onclick="makeDoc('inv')"${items.length?'':' disabled'}>Счёт на оплату →</button>
+      <button class="modal-btn primary" onclick="makeDoc('act')"${items.length?'':' disabled'}>Акт работ →</button>
+      <button class="modal-btn primary" onclick="makeDoc('upd')"${items.length?'':' disabled'}>УПД →</button>
       <button class="modal-btn primary" onclick="makeDoc('nak')"${items.length?'':' disabled'}>Накладная →</button>
       <button class="modal-btn primary" onclick="makeDoc('sf')"${items.length?'':' disabled'}>Счёт-фактура →</button>
     </div>`;
@@ -1381,6 +1388,50 @@ function makeDoc(kind){
     <p>Всего наименований ${L.length}, на сумму ${money(tot('sum'))} руб.<br><b>${rubWords(tot('sum'))}</b></p>
     <p class="small">Оплата данного счёта означает согласие с условиями выполнения работ. Счёт действителен к оплате в течение 5 банковских дней.</p>
     <div class="sign"><div>Руководитель <span class="ln"></span> / ${B(s.head)} /</div><div>Бухгалтер <span class="ln"></span> / ${B(s.acc)} /</div></div>`;
+  } else if(kind==='act'){
+    const n=DOC.act; title='Акт № '+n+' от '+dt;
+    body=`<h1>Акт № ${esc(n)} от ${dt}</h1><p class="small">об оказании услуг (выполнении работ)</p>
+    <table class="nb"><tr><td style="width:150px">Исполнитель:</td><td><b>${seller}${bank}</b></td></tr>
+    <tr><td>Заказчик:</td><td><b>${buyer}</b></td></tr>
+    <tr><td>Основание:</td><td>Заказы-наряды ${items.map(o=>esc(o.num)).join(', ')}</td></tr></table><br>
+    <table><tr><th>№</th><th>Наименование работ, услуг</th><th>Кол-во</th><th>Ед.</th><th>Цена</th><th>Сумма</th></tr>
+    ${L.map((l,i)=>`<tr><td class="c">${i+1}</td><td>${esc(l.name)}</td><td class="r">${l.qty}</td><td class="c">шт</td><td class="r">${money(l.sum/(l.qty||1))}</td><td class="r">${money(l.sum)}</td></tr>`).join('')}</table>
+    <table class="nb" style="width:auto;margin-left:auto"><tr><td class="r"><b>Итого:</b></td><td class="r"><b>${money(tot('sum'))}</b></td></tr>
+    <tr><td class="r"><b>${r?'В том числе НДС '+r+'%:':'Без налога (НДС)'}</b></td><td class="r"><b>${r?money(tot('vat')):'—'}</b></td></tr></table>
+    <p>Всего оказано услуг ${L.length}, на сумму ${money(tot('sum'))} руб.<br><b>${rubWords(tot('sum'))}</b></p>
+    <p>Вышеперечисленные работы (услуги) выполнены полностью и в срок. Заказчик претензий по объёму, качеству и срокам оказания услуг не имеет.</p>
+    <div class="sign"><div><b>Исполнитель</b><br>${B(s.name)}<br><br><span class="ln"></span> / ${B(s.head)} /<br><br>М.П.</div>
+    <div><b>Заказчик</b><br>${esc(DOC.clinic)}<br><br><span class="ln"></span> / <span class="ln"></span> /<br><br>М.П.</div></div>`;
+  } else if(kind==='upd'){
+    const n=DOC.upd, st=r?1:2; title='УПД № '+n+' от '+dt;
+    body=`<style>@page{size:A4 landscape;margin:8mm}.upd{display:flex;gap:8px}.upd-st{width:120px;border:1px solid #000;padding:6px;font-size:9px}.upd-st b{font-size:18px;display:block;text-align:center;margin:4px 0}</style>
+    <div class="upd"><div class="upd-st">Универсальный передаточный документ<br>Статус:<b>${st}</b>1 — счёт-фактура и передаточный документ (акт)<br>2 — передаточный документ (акт)</div><div style="flex:1">
+    <div class="small" style="text-align:right">Приложение № 1 к постановлению Правительства РФ от 26.12.2011 № 1137 (в ред. действующих изменений)</div>
+    <h1 style="margin-top:2px">Счёт-фактура № ${esc(n)} от ${dt} (1) &nbsp; Исправление № — от — (1а)</h1>
+    <table class="nb"><tr><td style="width:320px">Продавец (2)</td><td><b>${B(s.name)}</b></td></tr><tr><td>Адрес (2а)</td><td>${B(s.addr)}</td></tr>
+    <tr><td>ИНН/КПП продавца (2б)</td><td>${B(s.inn)} / ${B(s.kpp)}</td></tr><tr><td>Грузоотправитель и его адрес (3)</td><td>—</td></tr>
+    <tr><td>Грузополучатель и его адрес (4)</td><td>—</td></tr><tr><td>К платёжно-расчётному документу № — от — (5)</td><td></td></tr>
+    <tr><td>Документ об отгрузке (5а)</td><td>№ п/п 1–${L.length} № ${esc(n)} от ${dt}</td></tr>
+    <tr><td>Покупатель (6)</td><td><b>${esc(DOC.clinic)}</b></td></tr><tr><td>Адрес (6а)</td><td>${B(b.addr)}</td></tr>
+    <tr><td>ИНН/КПП покупателя (6б)</td><td>${B(b.inn)} / ${B(b.kpp)}</td></tr><tr><td>Валюта: наименование, код (7)</td><td>Российский рубль, 643</td></tr>
+    <tr><td>Идентификатор государственного контракта, договора (соглашения) (8)</td><td>—</td></tr></table></div></div>
+    <table><tr><th rowspan="2">Код товара/ работ, услуг</th><th rowspan="2">№ п/п</th><th rowspan="2">Наименование товара (описание выполненных работ, оказанных услуг)</th><th rowspan="2">Код вида товара</th><th colspan="2">Единица измерения</th><th rowspan="2">Коли-чество (объём)</th><th rowspan="2">Цена (тариф) за единицу</th><th rowspan="2">Стоимость без налога — всего</th><th rowspan="2">В том числе сумма акциза</th><th rowspan="2">Налоговая ставка</th><th rowspan="2">Сумма налога</th><th rowspan="2">Стоимость с налогом — всего</th><th colspan="2">Страна происхождения</th><th rowspan="2">Рег. номер декларации</th></tr>
+    <tr><th>код</th><th>условное обозначение</th><th>цифровой код</th><th>краткое наименование</th></tr>
+    <tr>${['А','1','1а','1б','2','2а','3','4','5','6','7','8','9','10','10а','11'].map(x=>`<td class="hint">${x}</td>`).join('')}</tr>
+    ${L.map((l,i)=>`<tr><td class="c">—</td><td class="c">${i+1}</td><td>${esc(l.name)}</td><td class="c">—</td><td class="c">796</td><td class="c">шт</td><td class="r">${l.qty}</td><td class="r">${money(l.price)}</td><td class="r">${money(l.net)}</td><td class="c">без акциза</td><td class="c">${rate}</td><td class="r">${vatCell(l.vat)}</td><td class="r">${money(l.sum)}</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>`).join('')}
+    <tr><td colspan="8"><b>Всего к оплате (9)</b></td><td class="r"><b>${money(tot('net'))}</b></td><td class="c">X</td><td></td><td class="r"><b>${vatCell(tot('vat'))}</b></td><td class="r"><b>${money(tot('sum'))}</b></td><td colspan="3"></td></tr></table>
+    <div class="sign"><div>Руководитель организации или иное уполномоченное лицо <span class="ln"></span> / ${B(s.head)} /</div><div>Главный бухгалтер или иное уполномоченное лицо <span class="ln"></span> / ${B(s.acc)} /</div></div>
+    <table class="nb" style="margin-top:10px"><tr><td style="width:50%;vertical-align:top">
+      Основание передачи (сдачи) / получения (приёмки) [8]: Заказы-наряды ${items.map(o=>esc(o.num)).join(', ')}<br>
+      Данные о транспортировке и грузе [9]: —<br><br>
+      Товар (груз) передал / услуги, результаты работ сдал [10]: <span class="ln"></span> / ${B(s.head)} /<br>
+      Дата отгрузки, передачи (сдачи) [11]: ${dt}<br>Иные сведения об отгрузке, передаче [12]: —<br>
+      Ответственный за правильность оформления факта хозяйственной жизни [13]: <span class="ln"></span> / ${B(s.acc)} /<br>
+      Наименование экономического субъекта — составителя документа [14]: ${B(s.name)}, ИНН/КПП ${B(s.inn)}/${B(s.kpp)}<br>М.П.</td>
+      <td style="vertical-align:top">Товар (груз) получил / услуги, результаты работ принял [15]: <span class="ln"></span> / <span class="ln"></span> /<br>
+      Дата получения (приёмки) [16]: <span class="ln"></span><br>Иные сведения о получении, приёмке [17]: —<br>
+      Ответственный за правильность оформления факта хозяйственной жизни [18]: <span class="ln"></span> / <span class="ln"></span> /<br>
+      Наименование экономического субъекта — составителя документа [19]: ${esc(DOC.clinic)}, ИНН/КПП ${B(b.inn)}/${B(b.kpp)}<br>М.П.</td></tr></table>`;
   } else if(kind==='nak'){
     const n=DOC.nak; title='Накладная № '+n+' от '+dt;
     body=`<h1>Товарная накладная № ${esc(n)} от ${dt}</h1>
@@ -1422,7 +1473,7 @@ function makeDoc(kind){
   openDocWindow(title,body);
   SETTINGS.docNum[kind]=Math.max(+SETTINGS.docNum[kind]||1,(parseInt(DOC[kind])||0)+1); saveSettings();
   if(window.onDocMade)onDocMade({kind,number:DOC[kind],date:DOC.date||iso(new Date()),clinic:DOC.clinic,total:tot('sum'),vat:tot('vat'),orders:items.map(o=>o.id),title,html:docHtml});
-  showToast({inv:'Счёт на оплату',nak:'Накладная',sf:'Счёт-фактура'}[kind]+' сформирован'+(kind==='inv'?'':'а'),'№ '+DOC[kind]+' · '+DOC.clinic);
+  showToast({inv:'Счёт на оплату сформирован',act:'Акт сформирован',upd:'УПД сформирован',nak:'Накладная сформирована',sf:'Счёт-фактура сформирована'}[kind],'№ '+DOC[kind]+' · '+DOC.clinic);
 }
 
 function searchFor(q){setFilter({status:'all',tech:'all',urgent:false,search:q});}
@@ -1473,7 +1524,7 @@ function saveSeller(){
 }
 function setPrice(k,v){SETTINGS.prices[k]=Math.max(0,+v||0);saveSettings();showToast('Цена обновлена',svcName(k)+': '+rub(SETTINGS.prices[k]));}
 function priceOf(k){return SETTINGS.prices[k]??SERVICES.find(s=>s.k===k)?.p??0;}
-const SELLER_FIELDS=[['name','Наименование','ООО «…» или ИП …'],['inn','ИНН',''],['kpp','КПП','для ООО'],['addr','Юр. адрес',''],['bank','Банк',''],['bik','БИК',''],['rs','Расчётный счёт',''],['ks','Корр. счёт',''],['head','Руководитель','Фамилия И.О.'],['acc','Главный бухгалтер','Фамилия И.О.']];
+const SELLER_FIELDS=[['name','Наименование','ООО «…» или ИП …'],['inn','ИНН',''],['kpp','КПП','для ООО'],['addr','Юр. адрес',''],['bank','Банк',''],['bik','БИК',''],['rs','Расчётный счёт',''],['ks','Корр. счёт',''],['head','Руководитель','Фамилия И.О.'],['acc','Главный бухгалтер','Фамилия И.О.'],['ru','Рег. удостоверение / ТУ','если есть'],['warranty','Гарантия, месяцев','12']];
 function sellerCard(){
   const s=SETTINGS.seller;
   return `<div class="p-card"><div class="p-card-ttl">Реквизиты лаборатории (для накладных и счетов-фактур)</div>
@@ -1820,6 +1871,7 @@ const REMAKE_REASONS=['Не подошло по посадке','Скол / по
 function orderActs(o){
   const b=[];
   b.push(`<button class="set-btn sec" onclick="printWorkOrder('${o.id}')">🏷 Печать наряда</button>`);
+  if(!o.cancelled)b.push(`<button class="set-btn sec" onclick="printPassport('${o.id}')">📜 Паспорт и гарантия</button>`);
   if(canCreate())b.push(`<button class="set-btn sec" onclick="repeatOrder('${o.id}')">↻ Повторить</button>`);
   if(canEdit(o))b.push(`<button class="set-btn sec" onclick="openEditOrder('${o.id}')">✏️ Изменить</button>`);
   if(canRemake(o))b.push(`<button class="set-btn sec" onclick="openRemake('${o.id}')">🔁 Переделка</button>`);
@@ -1842,6 +1894,7 @@ function openEditOrder(id){
     <div class="form-group"><label class="form-label">Услуга</label><select class="form-select" id="e-svc">${svcOptions(o.svc)}</select></div>
     <div class="form-row">${f('units','Единиц',o.units,'number')}${f('teeth','Зубы',o.teeth==='—'?'':o.teeth)}</div>
     <div class="form-row">${f('shade','Оттенок',o.shade==='—'?'':o.shade)}${f('material','Материал',o.material==='—'?'':o.material)}</div>
+    ${f('lot','Партия (LOT) материала — для паспорта изделия',o.lot||'')}
     <label class="chk"><input type="checkbox" id="e-urgent"${o.urgent?' checked':''}> ⚡ Срочный</label>
     <div class="set-note">Изменения попадут в историю заказа${window.CLOUD?', технику придёт уведомление':''}.</div>
     <div class="modal-actions"><button class="modal-btn cancel" onclick="closeDoc()">Отмена</button><button class="modal-btn primary" onclick="saveOrderEdit('${o.id}')">Сохранить</button></div>`;
@@ -1851,7 +1904,7 @@ function editValues(){
   const v=k=>document.getElementById('e-'+k).value.trim();
   if(!v('patient')){showToast('Укажите пациента','','error');return null;}
   const svc=v('svc');
-  return{patient:v('patient'),svc,type:svcName(svc),units:Math.max(1,parseInt(v('units'))||1),teeth:v('teeth')||'—',shade:v('shade')||'—',material:v('material')||'—',dl:v('dl')?iso2dmy(v('dl')):'—',urgent:document.getElementById('e-urgent').checked};
+  return{patient:v('patient'),svc,type:svcName(svc),units:Math.max(1,parseInt(v('units'))||1),teeth:v('teeth')||'—',shade:v('shade')||'—',material:v('material')||'—',lot:v('lot'),dl:v('dl')?iso2dmy(v('dl')):'—',urgent:document.getElementById('e-urgent').checked};
 }
 async function saveOrderEdit(id){
   const o=ORDERS.find(x=>x.id===id), p=editValues(); if(!o||!p)return;
@@ -1900,6 +1953,34 @@ function remakeCard(list){
   const reasons=by(o=>(o.remakeReason||'—').split(':')[0]), techs=by(o=>orig(o).tech), clin=by(o=>o.clinic);
   return `<div class="p-card"><div class="p-card-ttl">🔁 Переделки · ${rm.length} из ${base+rm.length} (${base?(rm.length/base*100).toFixed(1):0}%) · за счёт лаборатории ${rm.filter(o=>o.remakeBy!=='clinic').length}</div>
     <div class="p-grid"><div><div class="set-note">Причины</div>${bars(reasons,mx(reasons),'searchFor')}</div><div><div class="set-note">По техникам (исходный заказ)</div>${bars(techs,mx(techs),'filterTech')}</div><div><div class="set-note">По клиникам</div>${bars(clin,mx(clin),'searchFor')}</div></div></div>`;
+}
+
+// ── ПАСПОРТ ИЗДЕЛИЯ И ГАРАНТИЙНЫЙ ТАЛОН ──────────────────────────────────────
+function printPassport(id){
+  const o=ORDERS.find(x=>x.id===id); if(!o)return;
+  const s=SETTINGS.seller||{}, months=parseInt(s.warranty)||12;
+  const made=parseDl(o.doneAt)||new Date(), until=new Date(made); until.setMonth(until.getMonth()+months);
+  const d=x=>x.toLocaleDateString('ru-RU'), row=(k,v)=>`<tr><td style="width:220px">${k}</td><td><b>${esc(v||'—')}</b></td></tr>`;
+  const maker=`${esc(s.name||'OWN Digital Laboratory')}${s.inn?', ИНН '+esc(s.inn):''}${s.addr?', '+esc(s.addr):''}`;
+  openDocWindow('Паспорт и гарантия '+o.num,`<style>@page{size:A4 portrait;margin:14mm}.pb{page-break-before:always}</style>
+    <h1>Паспорт изделия № ${esc(o.num)}</h1>
+    <p class="small">Зубной протез (ортопедическая конструкция), изготовленный по индивидуальному заказу</p>
+    <table class="nb">${row('Изготовитель',maker)}${s.ru?row('Регистрационное удостоверение / ТУ',s.ru):''}${row('Заказ-наряд',o.num)}${row('Пациент',o.patient)}${row('Клиника',o.clinic)}${row('Лечащий врач',o.doctor)}
+      ${row('Вид изделия',svcName(o.svc))}${row('Количество единиц',String(o.units))}${row('Зубная формула',o.teeth)}${row('Материал',o.material)}${row('Партия (LOT) материала',o.lot)}${row('Оттенок',o.shade)}
+      ${row('Зубной техник',o.tech)}${row('Дата изготовления',d(made))}</table>
+    <p>Изделие изготовлено по оттискам (цифровым сканам) и техническому заданию врача, прошло контроль качества изготовителя.
+    Изделие предназначено для конкретного пациента и не подлежит передаче другим лицам.</p>
+    <div class="sign"><div>Контроль качества<br><br><span class="ln"></span> / <span class="ln"></span> /</div><div>Зубной техник<br><br><span class="ln"></span> / ${esc(o.tech||'')} /<br><br>М.П.</div></div>
+    <div class="pb"></div>
+    <h1>Гарантийный талон к изделию № ${esc(o.num)}</h1>
+    <table class="nb">${row('Изделие',svcName(o.svc)+' · '+o.units+' ед.'+(o.teeth&&o.teeth!=='—'?' · зубы '+o.teeth:''))}${row('Пациент',o.patient)}${row('Клиника / врач',o.clinic+' / '+o.doctor)}
+      ${row('Изготовитель',maker)}${row('Дата изготовления',d(made))}${row('Гарантийный срок',months+' мес., до '+d(until))}</table>
+    <p><b>Гарантия распространяется</b> на дефекты изготовления: сколы и трещины облицовки и каркаса, нарушение прилегания, возникшие при правильной эксплуатации.</p>
+    <p><b>Гарантия не распространяется</b> на случаи: механической травмы; несоблюдения рекомендаций врача по уходу и профилактическим осмотрам (не реже 1 раза в 6 месяцев);
+    изменений в полости рта (рецессия десны, атрофия, лечение опорных зубов); самостоятельной коррекции или ремонта изделия; использования изделия не по назначению.</p>
+    <p>Для обращения по гарантии пациент обращается в клинику, установившую изделие; клиника направляет изделие и этот талон в лабораторию.</p>
+    <div class="sign"><div>Изготовитель<br><br><span class="ln"></span> / ${esc(s.head||'')} /<br><br>М.П.</div><div>Клиника (дата установки <span class="ln" style="min-width:80px"></span>)<br><br><span class="ln"></span> / <span class="ln"></span> /<br><br>М.П.</div></div>
+    <p class="small">С условиями гарантии ознакомлен(а): <span class="ln" style="min-width:160px"></span> (подпись пациента)</p>`);
 }
 
 // ── СРОКИ ИЗГОТОВЛЕНИЯ ───────────────────────────────────────────────────────
@@ -2151,7 +2232,7 @@ renderOrders();
 if(!window.OWNLAB_CONFIG?.url&&new URLSearchParams(location.search).get('order'))setTimeout(()=>openDetail(new URLSearchParams(location.search).get('order')));
 else if(innerWidth>820){openDetail('o1');switchTab('timeline', document.querySelectorAll('.det-tab')[1]);}
 </script>
-<script src="config.js?v=10"></script>
-<script src="cloud.js?v=10"></script>
+<script src="config.js?v=11"></script>
+<script src="cloud.js?v=11"></script>
 </body>
 </html>

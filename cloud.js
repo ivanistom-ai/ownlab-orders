@@ -300,21 +300,44 @@
   };
 
   // ── ЗАГРУЗКА ДАННЫХ ─────────────────────────────────────────────────────────
+  // Supabase отдаёт не больше 1000 строк за запрос — читаем страницами, чтобы ничего не терялось
+  const PAGE = 1000;
+  async function all(table, mod = x => x, key = 'id') {
+    const out = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await mod(sb.from(table).select('*')).order(key, { ascending: true }).range(from, from + PAGE - 1);
+      if (error) return { data: null, error };
+      out.push(...data);
+      if (data.length < PAGE) break;
+    }
+    return { data: out, error: null };
+  }
+  // То же для любого запроса (в т.ч. RPC): make() каждый раз строит запрос заново
+  async function pages(make) {
+    const out = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await make().range(from, from + PAGE - 1);
+      if (error) throw error;
+      out.push(...data);
+      if (data.length < PAGE) break;
+    }
+    return out;
+  }
   async function loadAll() {
-    const none = Promise.resolve({ data: [] });
+    const none = Promise.resolve({ data: [], error: null });
     const [cl, pp, ord, pr, cm, fl, st, inv, tr, evs, tgr, cpr] = await Promise.all([
-      sb.from('clinics').select('*').order('name'),
-      sb.from('profiles').select('*').order('full_name'),
-      sb.from('orders').select('*').order('created_at', { ascending: false }),
-      canPrice() ? sb.from('order_prices').select('*') : none,
-      sb.from('order_comments').select('*').order('created_at'),
-      sb.from('order_files').select('*').order('created_at'),
-      sb.from('settings').select('*'),
-      INVITE_ROLES[role()] ? sb.from('invites').select('*').is('used_at', null).order('created_at', { ascending: false }) : none,
-      isStaff() || role() === 'tech' ? sb.from('tech_rates').select('*') : none,
-      sb.from('order_events').select('*').order('created_at'),
-      sb.from('user_telegram').select('*'),
-      isStaff() ? sb.from('clinic_pricing').select('*') : none,
+      all('clinics', x => x.order('name')),
+      all('profiles', x => x.order('full_name')),
+      all('orders', x => x.order('created_at', { ascending: false })),
+      canPrice() ? all('order_prices', x => x, 'order_id') : none,
+      all('order_comments', x => x.order('created_at')),
+      all('order_files', x => x.order('created_at')),
+      all('settings', x => x, 'key'),
+      INVITE_ROLES[role()] ? all('invites', x => x.is('used_at', null).order('created_at', { ascending: false }), 'token') : none,
+      isStaff() || role() === 'tech' ? all('tech_rates', x => x, 'tech_id') : none,
+      all('order_events', x => x.order('created_at')),
+      all('user_telegram', x => x, 'user_id'),
+      isStaff() ? all('clinic_pricing', x => x, 'clinic_id') : none,
     ]);
     for (const r of [cl, pp, ord, pr, cm, fl, st, inv, tr, evs, tgr, cpr]) if (r.error) throw r.error;
     CLINIC_PRICING = Object.fromEntries(cpr.data.map(x => [x.clinic_id, { discount: +x.discount, prices: x.prices || {} }]));
@@ -331,7 +354,7 @@
     Object.assign(SETTINGS, {
       name: ME.full_name || ME.email, initials: initialsOf(ME.full_name || ME.email), role: ROLE_N[ME.role],
       seller: Object.assign({ name: 'OWN Digital Laboratory' }, SELLER), vat: SELLER.vat || 'none',
-      prices: LAB.prices || {}, docNum: Object.assign({ inv: 1, nak: 1, sf: 1 }, LAB.docNum), buyers: LAB.buyers || {},
+      prices: LAB.prices || {}, docNum: Object.assign({ inv: 1, act: 1, upd: 1, nak: 1, sf: 1 }, LAB.docNum), buyers: LAB.buyers || {},
       techs: techs().map(t => t.full_name), techPercent: LAB.techPercent ?? 30, techRates: {},
     });
     ORDERS = ord.data.map(r => Object.assign(toOrder(r, prices[r.id], cms[r.id] || [], fls[r.id] || []), { events: ev[r.id] || [] }));
@@ -354,7 +377,7 @@
     });
   }
   let reloadT = null;
-  function reload(delay = 300) {
+  function reload(delay = 700) {
     clearTimeout(reloadT);
     reloadT = setTimeout(async () => {
       try { await loadAll(); } catch (e) { return err('Не удалось обновить данные', e); }
@@ -490,7 +513,7 @@
     const evs = (o.events || []).filter(e => (e.kind === 'stage' && e.to_stage === n) || (e.kind === 'created' && e.to_stage === n));
     return evs[evs.length - 1];
   }
-  const FIELD_N = { patient: 'пациент', svc: 'услуга', type: 'тип работы', units: 'единиц', teeth: 'зубы', shade: 'оттенок', material: 'материал', dl: 'срок', urgent: 'срочность', notes: 'ТЗ', trackNum: 'трек-номер', priority: 'приоритет' };
+  const FIELD_N = { patient: 'пациент', svc: 'услуга', type: 'тип работы', units: 'единиц', teeth: 'зубы', shade: 'оттенок', material: 'материал', dl: 'срок', urgent: 'срочность', notes: 'ТЗ', trackNum: 'трек-номер', priority: 'приоритет', lot: 'партия материала' };
   function eventText(e) {
     if (e.kind === 'edit') return 'Изменено: ' + e.info.split(',').map(k => FIELD_N[k] || k).join(', ');
     if (e.kind === 'cancel') return '❌ Заказ отменён' + (e.info ? ': ' + e.info : '');
@@ -533,7 +556,7 @@
   };
 
   // ── ЗАПИСЬ ИЗМЕНЕНИЙ ────────────────────────────────────────────────────────
-  const DATA_KEYS = ['patient', 'clinic', 'doctor', 'tech', 'type', 'units', 'shade', 'material', 'teeth', 'dl', 'cr', 'svc', 'urgent', 'priority', 'notes', 'trackNum', 'trackSt', 'needsData', 'remakeOf', 'remakeReason', 'remakeBy'];
+  const DATA_KEYS = ['patient', 'clinic', 'doctor', 'tech', 'type', 'units', 'shade', 'material', 'teeth', 'dl', 'cr', 'svc', 'urgent', 'priority', 'notes', 'trackNum', 'trackSt', 'needsData', 'remakeOf', 'remakeReason', 'remakeBy', 'lot'];
   const pickData = o => Object.fromEntries(DATA_KEYS.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 
   window.doAction = async function (action, id) {
@@ -708,7 +731,7 @@
   window.payMode = () => role() === 'tech' ? 'tech' : 'staff';
   window.payRows = async function () {
     const [f, t] = payPeriod();
-    const data = await q(sb.rpc('tech_pay', { p_from: f ? f.toISOString() : null, p_to: t ? t.toISOString() : null }));
+    const data = await pages(() => sb.rpc('tech_pay', { p_from: f ? f.toISOString() : null, p_to: t ? t.toISOString() : null }).order('order_id'));
     return data.map(r => ({ id: r.order_id, num: r.num, patient: r.patient, work: r.work || svcName(r.svc), units: +r.units, done: new Date(r.done_at),
       tech_id: r.tech_id, tech: r.tech_name || '—', amount: r.amount === null ? null : +r.amount, percent: +r.percent, pay: +r.pay }));
   };
@@ -817,7 +840,7 @@
   const BAL = { preset: 'ytd', from: '', to: '', open: null };
   [BAL.from, BAL.to] = presetRange(BAL.preset);
   let BAL_DATA = [], BAL_DOCS = [], BAL_PAYS = [];
-  const KIND_N = { inv: 'Счёт на оплату', nak: 'Накладная', sf: 'Счёт-фактура' };
+  const KIND_N = { inv: 'Счёт на оплату', act: 'Акт', upd: 'УПД', nak: 'Накладная', sf: 'Счёт-фактура' };
   window.onDocMade = async function (d) {
     if (!isStaff()) return;
     const c = CLINICS.find(x => x.name === d.clinic); if (!c) return;
@@ -834,8 +857,8 @@
     try {
       const [b, d, p] = await Promise.all([
         q(sb.rpc('clinic_balances', { p_from: BAL.from || null, p_to: BAL.to || null })),
-        q(sb.from('documents').select('id,clinic_id,kind,number,doc_date,total,vat,title,order_ids').order('doc_date', { ascending: false })),
-        q(sb.from('payments').select('*').order('paid_at', { ascending: false })),
+        pages(() => sb.from('documents').select('id,clinic_id,kind,number,doc_date,total,vat,title,order_ids').order('doc_date', { ascending: false }).order('id')),
+        pages(() => sb.from('payments').select('*').order('paid_at', { ascending: false }).order('id')),
       ]);
       BAL_DATA = b; BAL_DOCS = d; BAL_PAYS = p;
     } catch (e) { el.innerHTML = `<div class="page-ttl">💳 Расчёты</div><div class="p-card">Не удалось загрузить: ${esc(e.message || e)}</div>`; return; }
@@ -854,7 +877,7 @@
         <label>По дату<input type="date" class="set-input" value="${BAL.to}" onchange="CLOUD_UI.setBal('to',this.value)"></label></div>
         <div class="r-actions"><button class="set-btn sec" onclick="CLOUD_UI.balCSV()">⬇️ Сальдо в Excel</button>
         ${isStaff() ? '<button class="set-btn sec" onclick="CLOUD_UI.export1C(\'sales\')">⬇️ Реализации для 1С</button><button class="set-btn sec" onclick="CLOUD_UI.export1C(\'pays\')">⬇️ Оплаты для 1С</button>' : ''}</div>
-        ${isStaff() ? '<div class="set-note">Файлы для 1С — таблица Excel: «Реализации» по выполненным работам (с номером накладной, если она выписана) и «Оплаты» по поступлениям. В 1С: «Загрузка данных из табличного документа» или передайте бухгалтеру. ИНН и КПП клиник берутся из окна «Счёт, накладная, счёт-фактура».</div>' : ''}</div>
+        ${isStaff() ? '<div class="set-note">Файлы для 1С — таблица Excel: «Реализации» по выполненным работам (с номером накладной, если она выписана) и «Оплаты» по поступлениям. В 1С: «Загрузка данных из табличного документа» или передайте бухгалтеру. ИНН и КПП клиник берутся из окна «Счёт, акт, УПД».</div>' : ''}</div>
       ${isStaff() ? `<div class="kpi-row">
         <div class="kpi"><div class="kn" style="color:var(--org)">${rub(S('accrued'))}</div><div class="kl">Начислено за период</div></div>
         <div class="kpi"><div class="kn" style="color:var(--green)">${rub(S('paid'))}</div><div class="kl">Оплачено за период</div></div>
@@ -878,7 +901,7 @@
         <button class="set-btn" onclick="CLOUD_UI.addPayment('${r.clinic_id}')">＋ Добавить</button></div>` : ''}
       <div class="p-card-ttl" style="margin-top:8px">Документы · ${docs.length}</div>
       ${docs.length ? `<table class="rep-in">${docs.map(d => `<tr onclick="CLOUD_UI.openStored('${d.id}')"><td>${ruDT(d.doc_date)}</td><td>${KIND_N[d.kind]} № ${esc(d.number)}</td><td class="n">${rub(+d.total)}</td><td>${d.kind === 'sf' ? '' : (paidBy(d.id) >= +d.total - 0.004 ? '<span class="tg-ok">оплачен</span>' : paidBy(d.id) > 0 ? 'частично · ' + rub(paidBy(d.id)) : '<span class="bal-neg">не оплачен</span>')}</td><td>открыть →</td></tr>`).join('')}</table>`
-        : '<div class="set-note">Документы появятся здесь, когда вы сформируете счёт, накладную или счёт-фактуру в «Аналитике».</div>'}
+        : '<div class="set-note">Документы появятся здесь, когда вы сформируете счёт, акт, УПД или накладную в «Аналитике».</div>'}
       <div class="p-card-ttl" style="margin-top:12px">Оплаты · ${pays.length}</div>
       ${pays.length ? `<table class="rep-in">${pays.map(p => `<tr><td>${ruDT(p.paid_at)}</td><td class="n"><b>${rub(+p.amount)}</b></td><td>${esc(p.method)}</td><td>${esc(p.note || '')}${p.document_id ? ' · ' + esc((d => d ? KIND_N[d.kind] + ' № ' + d.number : '')(BAL_DOCS.find(d => d.id === p.document_id))) : ''}</td><td>${isStaff() ? `<button class="picked-del" title="Удалить оплату" onclick="CLOUD_UI.delPayment('${p.id}')">✕</button>` : ''}</td></tr>`).join('')}</table>` : '<div class="set-note">Оплат пока нет</div>'}
     </div>`;
@@ -907,7 +930,7 @@
     },
     async actSverki(cid) {
       try {
-        const rows = await q(sb.rpc('clinic_ledger', { p_clinic: cid, p_from: BAL.from || null, p_to: BAL.to || null }));
+        const rows = await pages(() => sb.rpc('clinic_ledger', { p_clinic: cid, p_from: BAL.from || null, p_to: BAL.to || null }));
         const b = BAL_DATA.find(x => x.clinic_id === cid), s = SETTINGS.seller, c = clinicName(cid) || '';
         const open = +b.opening, deb = rows.reduce((x, r) => x + +r.debit, 0), cred = rows.reduce((x, r) => x + +r.credit, 0), close = open + deb - cred;
         const per = (BAL.from ? ruDT(BAL.from) : 'начала работы') + ' — ' + (BAL.to ? ruDT(BAL.to) : ruDT(new Date()));
@@ -936,7 +959,7 @@
     const r = vatRate(), vatOf = sum => r ? Math.round(sum * r / (100 + r) * 100) / 100 : 0, buyer = n => SETTINGS.buyers[n] || {};
     let rows, name;
     if (kind === 'sales') {
-      const docFor = id => { const ds = BAL_DOCS.filter(d => (d.order_ids || []).includes(id)); return ds.find(d => d.kind === 'nak') || ds.find(d => d.kind === 'inv') || ds[0]; };
+      const docFor = id => { const ds = BAL_DOCS.filter(d => (d.order_ids || []).includes(id)); return ds.find(d => d.kind === 'upd') || ds.find(d => d.kind === 'act') || ds.find(d => d.kind === 'nak') || ds.find(d => d.kind === 'inv') || ds[0]; };
       rows = [['Дата', 'Документ', 'Контрагент', 'ИНН', 'КПП', 'Номенклатура', 'Количество', 'Ед. изм.', 'Цена', 'Сумма', 'Ставка НДС', 'Сумма НДС', 'Заказ']];
       ORDERS.filter(o => !o.cancelled && o.doneAt && inP(parseDl(o.doneAt)) && amt(o) > 0).sort((a, b) => parseDl(a.doneAt) - parseDl(b.doneAt)).forEach(o => {
         const d = docFor(o.id), b = buyer(o.clinic), sum = amt(o);
@@ -948,7 +971,7 @@
       rows = [['Дата', 'Контрагент', 'ИНН', 'КПП', 'Сумма', 'Способ оплаты', 'Назначение']];
       BAL_PAYS.filter(p => inP(fromIso(p.paid_at))).sort((a, b) => a.paid_at.localeCompare(b.paid_at)).forEach(p => {
         const c = clinicName(p.clinic_id) || '', b = buyer(c), d = BAL_DOCS.find(x => x.id === p.document_id);
-        rows.push([ruDT(p.paid_at), c, b.inn || '', b.kpp || '', +p.amount, p.method, [d ? 'Оплата по ' + { inv: 'счёту на оплату', nak: 'накладной', sf: 'счёту-фактуре' }[d.kind] + ' № ' + d.number + ' от ' + ruDT(d.doc_date) : 'Оплата за работы', p.note].filter(Boolean).join('; ')]);
+        rows.push([ruDT(p.paid_at), c, b.inn || '', b.kpp || '', +p.amount, p.method, [d ? 'Оплата по ' + { inv: 'счёту на оплату', act: 'акту', upd: 'УПД', nak: 'накладной', sf: 'счёту-фактуре' }[d.kind] + ' № ' + d.number + ' от ' + ruDT(d.doc_date) : 'Оплата за работы', p.note].filter(Boolean).join('; ')]);
       });
       name = 'oplaty';
     }
@@ -967,7 +990,7 @@
   window.renderPay = async function () {
     await origRenderPay();
     if (curView !== 'pay' || !(isStaff() || role() === 'tech')) return;
-    try { [PAYOUTS, PAY_ALL] = await Promise.all([q(sb.from('tech_payouts').select('*').order('paid_at', { ascending: false })), q(sb.rpc('tech_pay', { p_from: null, p_to: null }))]); }
+    try { [PAYOUTS, PAY_ALL] = await Promise.all([pages(() => sb.from('tech_payouts').select('*').order('paid_at', { ascending: false }).order('id')), pages(() => sb.rpc('tech_pay', { p_from: null, p_to: null }).order('order_id'))]); }
     catch (e) { return err('Выплаты не загрузились', e); }
     const acc = {}, paid = {};
     PAY_ALL.forEach(r => acc[r.tech_id] = (acc[r.tech_id] || 0) + +r.pay);
